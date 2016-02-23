@@ -1,0 +1,10 @@
+#!/bin/ksh
+####################################################################################
+#
+# Description:  Authorizes whether a user is allowed access to a role (TODO)
+# Parameters:   1 - The user name
+#               2 - The role name
+# 
+####################################################################################
+
+return 0

@@ -1,0 +1,44 @@
+#!/bin/ksh
+####################################################################################
+#
+# Description:  Authorizes whether a user is allowed access to a role (TODO)
+# Parameters:   1 - The user name
+#               2 - The role name
+# 
+####################################################################################
+    
+if [[ -f "${DOTFILES_AUTHORIZE_FILE}" ]]; then
+
+    GROUP_LIST=$(groups "${1}" | cut -d" " -f3-)
+    
+    grep -v "^#" ${DOTFILES_AUTHORIZE_FILE} | grep -v "^$" | while read -r userauth; do
+        
+        AUTH_ROLE_LIST=$(echo "${userauth}" | cut -d" " -f2-)
+        AUTH_USER=$(echo "${userauth}" | cut -d" " -f1)
+        AUTH_GROUP="*"
+            
+        if [[ "${AUTH_USER}" =~ .*:.* ]]; then
+            AUTH_USER=$(echo "${AUTH_USER}" | cut -d ":" -f1)
+            AUTH_GROUP=$(echo "${AUTH_USER}" | cut -d ":" -f2)
+        fi
+            
+        #if [[ "${1}" =~ ^${AUTH_USER}$ ]]; then echo true; else echo false; fi
+        #if [[ "${GROUP_LIST}" =~ ^.*[ ]*${AUTH_GROUP}.*[ ]*$ ]]; then echo true; else echo false; fi
+        #if [[ "${2}" =~ ^.*[ ]*${AUTH_ROLE_LIST}.*[ ]*$ ]]; then echo true; else echo false; fi
+            
+        # Perform some basic re matching again username, groupname and roles, if in list then success
+        if [[ "${1}" =~ ^${AUTH_USER}$ && "${GROUP_LIST}" =~ ^.*[ ]*${AUTH_GROUP}.*[ ]*$ ]]; then
+          
+            if [[ ${2} =~ ^.*[ ]*${AUTH_ROLE_LIST}.*[ ]*$ ]]; then
+                return 0
+            fi
+                
+           return 1
+        fi
+            
+    done
+
+    return 1
+fi
+
+return 0
