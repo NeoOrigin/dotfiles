@@ -1493,7 +1493,7 @@ done
 
 
 # Check we have the right amount of parameters left
-if [[ $# -ne 2 ]]; then
+if [[ $# -lt 2 ]]; then
     if [[ $# -lt 1 || ( "$1" != "list" && "$1" != "reset" ) ]]; then
         usage >&2
         return 1
@@ -1501,12 +1501,7 @@ if [[ $# -ne 2 ]]; then
 fi
 
 MAIN_CMD="$1"
-NEW_ROLE="$2"
 shift
-[[ "$MAIN_CMD" != "list" && "$MAIN_CMD" != "reset" ]] && shift
-
-# Find all roles installed on the machine / in known paths
-ROLE_LIST=$( echo "${DOTFILES_ROLES_PATH}" | sed 's/:/\n/g' | xargs -i find {} -maxdepth 1 -mindepth 1 2>/dev/null )
 
 # Basic validation and executing high level commands that dont erquire environment manipulation
 case "$MAIN_CMD" in
@@ -1514,14 +1509,11 @@ case "$MAIN_CMD" in
     request            ) ;;
     release            ) ;;
     reset              ) ;;
-    describe           ) describe_role "$NEW_ROLE" "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
-                         return $?
-                         ;;
-    list               ) echo "${ROLE_LIST}"
-                         return $?
-                         ;;
-    help               ) help_role "$NEW_ROLE"
-                         return $?
+    describe           ) ;;
+    list               ) ;;
+    help               ) ;;
+    -h | --help        ) usage
+                         return 0
                          ;;
     *                  ) usage >&2
                          return 1
@@ -1529,6 +1521,31 @@ case "$MAIN_CMD" in
     
 esac
 
+# Find all roles installed on the machine / in known paths
+ROLE_LIST=$( echo "${DOTFILES_ROLES_PATH}" | sed 's/:/\n/g' | xargs -i find {} -maxdepth 1 -mindepth 1 2>/dev/null )
+
+# Very lightweight functionality that doesnt need to know of current role state etc
+if [[ "$MAIN_CMD" == "list" ]]; then
+    echo "${ROLE_LIST}"
+    return $?
+fi
+
+# Further commands interact directly with an already allocated role or a specific one that needs querying, reset is an exception as it has no arguments
+# however due to its implementation We call it like any other
+NEW_ROLE="$2"
+[[ "$MAIN_CMD" != "reset" ]] && shift
+
+
+case "$MAIN_CMD" in
+
+    describe           ) describe_role "$NEW_ROLE" "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
+                         return $?
+                         ;;
+    help               ) help_role "$NEW_ROLE"
+                         return $?
+                         ;;
+    
+esac
 
 # We perform this seperately than the above so that we arent modifying environment variables simply because we've been asked to describe something
 export DOTFILES_ALLOCATION_INDEX="${DOTFILES_ALLOCATION_INDEX:-0}"
