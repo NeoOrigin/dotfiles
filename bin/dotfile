@@ -414,10 +414,10 @@ function setup_role_aliases
         # Go through all alias names, grab their value and create the alias
         for ALIAS_DEF in ${ALIASES}; do
         
-            name=$ALIAS_DEF
+            name="$ALIAS_DEF"
             value=$(grep "^$ALIAS_DEF " "$ROLE_ALIASES" | cut -d" " -f2-)
 
-            eval alias ${name}="${value}"
+            eval alias -- "${name}"="${value}"
             if [[ $? -ne 0 ]]; then
                 echo "ERROR: Could not create alias [${name}] from role [${ROLE_PATH}]" >&2
                 return 3
@@ -891,7 +891,7 @@ function teardown_role_aliases
         
         for ALIAS_DEF in ${ALIASES}; do
         
-            unalias "${ALIAS_DEF}" 2>/dev/null
+            unalias -- "${ALIAS_DEF}" 2>/dev/null
             # No point monitoring for error, alias wont be there
             
         done
@@ -1004,7 +1004,7 @@ function teardown_role_environment
                           ;;
                 prepend ) #eval export ${name}=${value}${name}
                           value_interpreted=$(eval echo "${value}")
-                          new_value=$(env | grep "^${name}=" | sed "s|^${name}=${value_interpreted}||g")
+                          new_value=$(env | grep "^${name}=" | sed "s|^${name}=||g" | sed "s|^${value_interpreted}||g")
                           
                           export ${name}="$new_value"
                           if [[ $? -ne 0 ]]; then
@@ -1014,7 +1014,7 @@ function teardown_role_environment
                           ;;
                 append  ) #eval export ${name}=${value}${name}
                           value_interpreted=$(eval echo "${value}")
-                          new_value=$(env | grep "^${name}=" | sed "s|^{name}=||g" | sed "s|${value_interpreted}$||g")
+                          new_value=$(env | grep "^${name}=" | sed "s|^${name}=||g" | sed "s|${value_interpreted}$||g")
                           
                           export ${name}="$new_value"
                           if [[ $? -ne 0 ]]; then
