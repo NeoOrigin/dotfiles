@@ -592,10 +592,12 @@ function setup_role_paths
     ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_BIN="$ROLE_PATH/bin"
     ROLE_LIB="$ROLE_PATH/lib"
+    ROLE_FUN="$ROLE_PATH/funcs"
 
     if [[ "$USE_PATHS" == "true" ]]; then
     
         [[ -d "$ROLE_BIN" ]] && export PATH="$ROLE_BIN:$PATH"
+	[[ -d "$ROLE_FUN" ]] && export FPATH="$ROLE_FUN:$FPATH"
         [[ -d "$ROLE_LIB" ]] && export LD_LIBRARY_PATH="$ROLE_LIB:$LD_LIBRARY_PATH"
 
     fi
@@ -1089,10 +1091,12 @@ function teardown_role_paths
     ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_BIN="$ROLE_PATH/bin"
     ROLE_LIB="$ROLE_PATH/lib"
+    ROLE_FUN="$ROLE_PATH/funcs"
 
     if [[ "$USE_PATHS" == "true" ]]; then
     
         [[ -d "$ROLE_BIN" ]] && export PATH=$(echo "$PATH" | sed "s|^$ROLE_BIN||g")
+	[[ -d "$ROLE_FUN" ]] && export FPATH=$(echo "$FPATH" | sed "s|^$ROLE_FUN||g")
         [[ -d "$ROLE_LIB" ]] && export LD_LIBRARY_PATH=$(echo "$LD_LIBRARY_PATH" | sed "s|^$ROLE_LIB||g")
 
     fi
