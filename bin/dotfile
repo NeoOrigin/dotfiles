@@ -823,8 +823,16 @@ function setup_role_links
             BASE_PATH="${HOME}"
             
             LINKS_LIST=""
-            [[ -f "$ROLE_PATH/meta" ]] && LINKS_LIST=$(grep -v "^link ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
-            [[ -n "${LINKS_LIST}" ]] && BASE_PATH="${LINKS_LIST}"
+            CHMOD_PERMS=""
+            if [[ -f "$ROLE_PATH/meta" ]]; then
+            
+		OVERRIDES=$(grep -E "^(chmod|link) ${SHORT_NAME} " "$ROLE_PATH/meta")
+
+                CHMOD_PERMS=$(echo "${OVERRIDES}" | grep "^chmod " | head -1 | cut -d" " -f3)
+                LINKS_LIST=$(echo "${OVERRIDES}" | grep "^link " | head -1 | cut -d" " -f3)
+                
+                [[ -n "${LINKS_LIST}" ]] && BASE_PATH="${LINKS_LIST}"
+            fi
             
             # Check the link already exists, if it does we may need to repoint it
             if [[ -L "${BASE_PATH}/${SHORT_NAME}" ]]; then
@@ -861,6 +869,12 @@ function setup_role_links
                 if [[ $? -ne 0 ]]; then
                     echo "ERROR: Could not add symbolic links from role [${ROLE_PATH}]" >&2
                     return 5
+                fi
+                
+                if [[ -n "$CHMOD_PERMS" ]]; then
+                    CURR_PERMS=$(find "${BASE_PATH}" -mindepth 1 -maxdepth 1 -name "${SHORT_NAME}" -printf "%#m\n")
+                    
+                    [[ "$CURR_PERMS" != "$CHMOD_PERMS" ]] && chmod "$CHMOD_PERMS" "${BASE_PATH}/${SHORT_NAME}"
                 fi
                 
             fi
