@@ -1438,6 +1438,11 @@ USE_SCRIPT="${DOTFILES_INCLUDE_SCRIPT:-true}"       # Do we include role environ
 DEBUG="${DOTFILES_DEBUG:-false}"                    # Debug messages to log output
 TRACE=false                                         # Trace is purely at a user level
 
+HASTTY=true
+tty -s
+[[ $? -ne 0 ]] && HASTTY=false                      # Helper variable to determine whether we have an interactive user
+
+
 while [[ $# -ne 0 ]]; do
 
     case "$1" in
