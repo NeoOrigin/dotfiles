@@ -5,19 +5,24 @@ The dotfiles project is intended to be used as a centralised store of role based
   - Environment Variables
   - Aliases
   - Functions
+  - Files
+  - Symbolic Links
+  - Paths
 
-The project came about in an organisation where there were 40+ developers, many of which shared multiple roles and responsbilties including architecture, development, database administration, gui development and so forth.  With so many developers (multipled by the myriad of test and production environments) user configurations were almost always non standard and required significant effort to setup and debug.
+The project came about in an organisation where there were 40+ developers working across 20+ servers, many of which shared multiple roles and responsbilties including architecture, development, database administration, gui development and so forth.  With the ease of spinning up virtual machines, the increased ingestion of "Big Data" and the demands it places on scalability a framework was required whereby users could share configuration
+data in a version controlled manner.  With so many developers (multipled by the myriad of test and production environments) user configurations were almost always non standard and required significant effort at the time 
+to setup and debug.
 
 > The overriding design goal for dotfiles is to make it as easy as possible to maintain user configuration information
 > in a simplistic, centralised and pure UNIX manner.  It is primarily designed for command line environments and builds
 > on the concept of roles in an additive fashion.  
 
 ### Version
-1.1.0
+1.2.0
 
 ### Tech
 
-dotfiles is a pure shell based solution and has no other dependencies other than ksh.  
+dotfiles is a pure shell based solution and has no other dependencies other than a POSIX compliant shell such as bash or ksh.  
 
 ### Installation
 
@@ -30,17 +35,17 @@ $ git clone bis_git@cecpvmlx016:dotfiles.git
 Add the following lines to your .profile (replacing the <role> marker with the name of the role you wish to inherit).  
 ```sh
 $ export DOTFILES_HOME=$HOME/projects/dotfiles
-$ . $DOTFILES_HOME/bin/dotfile --request <role>
+$ . $DOTFILES_HOME/bin/dotfile request <role>
 ```
 
-You can add multiple roles using the following syntax (NOTE they are evaluated from left to right).  
+You can add multiple roles by simple chaining of commands
 ```sh
-$ . $DOTFILES_HOME/bin/dotfile --request <role> --request <role>
+$ . $DOTFILES_HOME/bin/dotfile request <role> && . $DOTFILES_HOME/bin/dotfile request <role>
 ```
 
 To list what roles are available you can run the following:
 ```sh
-$ $DOTFILES_HOME/bin/dotfile --list
+$ $DOTFILES_HOME/bin/dotfile list
 ```
 
 ### Products
