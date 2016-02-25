@@ -414,12 +414,12 @@ function setup_role_aliases
         # Go through all alias names, grab their value and create the alias
         for ALIAS_DEF in ${ALIASES}; do
         
-            name="$ALIAS_DEF"
-            value=$(grep "^$ALIAS_DEF " "$ROLE_ALIASES" | cut -d" " -f2-)
+            name=$(echo "$ALIAS_DEF" | sed 's|\.|\\.|g')
+            value=$(grep "^$name " "$ROLE_ALIASES" | cut -d" " -f2-)
 
-            eval alias -- "${name}"="${value}"
+            eval alias -- "${ALIAS_DEF}"="'${value}'"
             if [[ $? -ne 0 ]]; then
-                echo "ERROR: Could not create alias [${name}] from role [${ROLE_PATH}]" >&2
+                echo "ERROR: Could not create alias [${ALIAS_DEF}] from role [${ROLE_PATH}]" >&2
                 return 3
             fi
 
@@ -624,14 +624,15 @@ function setup_role_files
         for name in ${TARGETS}; do
         
             SHORT_NAME=$(basename "${name}")
+            SHORT_NAME_SAFE=$(echo "${SHORT_NAME}" | sed 's|\.|\\.|g')
             
             BASE_PATH="${HOME}"
             
             FILES_LIST=""
-            [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^file ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
+            [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^file ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
             [[ -n "${FILES_LIST}" ]] && BASE_PATH="${FILES_LIST}"
             
-            FILES_MANAGED=$(grep -v "^${SHORT_NAME} " "${BASE_PATH}/.dotfile.managed")
+            FILES_MANAGED=$(grep -v "^${SHORT_NAME_SAFE} " "${BASE_PATH}/.dotfile.managed")
             ACTUAL_VALUE="-"
             
             # Determines whether we need to copy the file (ie we dont copy a file if it already exists)
@@ -647,9 +648,9 @@ function setup_role_files
             if ${FILE_EXISTS}; then
 
                 CKSUM_METHOD=""
-                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_METHOD=$(grep -v "^hash ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
+                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_METHOD=$(grep -v "^hash ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
                 CKSUM_VALUE=""
-                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_VALUE=$(grep -v "^hash ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f4-)
+                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_VALUE=$(grep -v "^hash ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f4-)
                 
                 case "${CKSUM_METHOD}" in
                 
@@ -741,8 +742,8 @@ function setup_role_files
             if [[ "${RM_ENTRY}" == "true" ]]; then
                 
                 # Remove the link, ready to rebuild
-                ${DEBUG} && log_it DEBUG CLEANUP "grep -v '^${SHORT_NAME} ' '${BASE_PATH}/.dotfile.managed' > '${BASE_PATH}/.dotfile.managed2'"
-                grep -v "^${SHORT_NAME} " "${BASE_PATH}/.dotfile.managed" > "${BASE_PATH}/.dotfile.managed2"
+                ${DEBUG} && log_it DEBUG CLEANUP "grep -v '^${SHORT_NAME_SAFE} ' '${BASE_PATH}/.dotfile.managed' > '${BASE_PATH}/.dotfile.managed2'"
+                grep -v "^${SHORT_NAME_SAFE} " "${BASE_PATH}/.dotfile.managed" > "${BASE_PATH}/.dotfile.managed2"
                 if [[ $? -ne 0 ]]; then
                     echo "ERROR: Could not add remove file from role [${ROLE_PATH}]" >&2
                     return 4
@@ -818,7 +819,8 @@ function setup_role_links
         for name in ${TARGETS}; do
         
             SHORT_NAME=$(basename "${name}")
-            
+            SHORT_NAME_SAFE=$(echo "${SHORT_NAME}" | sed 's|\.|\\.|g')
+
             # Determines whether we need to create the link (ie we dont rebuild a link if it already exists)
             REBUILD_LINK=true
             
@@ -828,7 +830,7 @@ function setup_role_links
             CHMOD_PERMS=""
             if [[ -f "$ROLE_PATH/meta" ]]; then
             
-		OVERRIDES=$(grep -E "^(chmod|link) ${SHORT_NAME} " "$ROLE_PATH/meta")
+	    	    OVERRIDES=$(grep -E "^(chmod|link) ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta")
 
                 CHMOD_PERMS=$(echo "${OVERRIDES}" | grep "^chmod " | head -1 | cut -d" " -f3)
                 LINKS_LIST=$(echo "${OVERRIDES}" | grep "^link " | head -1 | cut -d" " -f3)
