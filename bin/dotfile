@@ -254,14 +254,15 @@ function describe_role
 {
     # Describe A Role ######
     NEW_ROLE="$1"
-    ROLE_LIST="$2"
-    USE_ENV="$3"
-    USE_LINK="$4"
-    USE_DEPS="$5"
-    USE_PATHS="$6"
-    USE_FILES="$7"
-    USE_ALIASES="$8"
-    USE_SCRIPT="$9"
+    NEW_ROLE_ACTION="$2"
+    ROLE_LIST="$3"
+    USE_ENV="$4"
+    USE_LINK="$5"
+    USE_DEPS="$6"
+    USE_PATHS="$7"
+    USE_FILES="$8"
+    USE_ALIASES="$9"
+    USE_SCRIPT="$10"
 
     # Normalize for easier pattern matching etc
     NEW_ROLE_UPPER=$(normalize_role "${NEW_ROLE}")
@@ -292,14 +293,15 @@ function describe_role
 function release_role
 {
     NEW_ROLE="$1"
-    ROLE_LIST="$2"
-    USE_ENV="$3"
-    USE_LINK="$4"
-    USE_DEPS="$5"
-    USE_PATHS="$6"
-    USE_FILES="$7"
-    USE_ALIASES="$8"
-    USE_SCRIPT="$9"
+    NEW_ROLE_ACTION="$2"
+    ROLE_LIST="$3"
+    USE_ENV="$4"
+    USE_LINK="$5"
+    USE_DEPS="$6"
+    USE_PATHS="$7"
+    USE_FILES="$8"
+    USE_ALIASES="$9"
+    USE_SCRIPT="$10"
     
     # Normalize for easier pattern matching etc
     NEW_ROLE_UPPER=$(normalize_role "${NEW_ROLE}")
@@ -313,7 +315,7 @@ function release_role
         
         while [[ "${#APPLIED_ROLE[@]}" -gt 0 ]]; do
 
-            release_role "${APPLIED_ROLE[0]}" "${ROLE_LIST}" "${USE_ENV}" "${USE_LINK}" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT" || return $?
+            release_role "${APPLIED_ROLE[0]}" "${NEW_ROLE_ACTION}" "${ROLE_LIST}" "${USE_ENV}" "${USE_LINK}" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT" || return $?
 
             APPLIED_ROLE=($(env | grep "^DOTFILES_ADD_ROLE__" | cut -d"_" -f5- | unnormalize_role | sed 's/=/ /g' | sort -k2,2 -nr))
 
@@ -361,14 +363,15 @@ function release_role
 function request_role
 {
     NEW_ROLE="$1"
-    ROLE_LIST="$2"
-    USE_ENV="$3"
-    USE_LINK="$4"
-    USE_DEPS="$5"
-    USE_PATHS="$6"
-    USE_FILES="$7"
-    USE_ALIASES="$8"
-    USE_SCRIPT="$9"
+    NEW_ROLE_ACTION="$2"
+    ROLE_LIST="$3"
+    USE_ENV="$4"
+    USE_LINK="$5"
+    USE_DEPS="$6"
+    USE_PATHS="$7"
+    USE_FILES="$8"
+    USE_ALIASES="$9"
+    USE_SCRIPT="$10"
     
     # Normalize for easier pattern matching etc
     NEW_ROLE_UPPER=$(normalize_role "${NEW_ROLE}")
@@ -1560,13 +1563,14 @@ fi
 
 # Further commands interact directly with an already allocated role or a specific one that needs querying, reset is an exception as it has no arguments
 # however due to its implementation We call it like any other
-NEW_ROLE="$2"
+NEW_ROLE=$(echo "$2" | cut -d":" -f1)
+NEW_ROLE_ACTION=$(echo "$2" | cut -d":" -f2)
 [[ "$MAIN_CMD" != "reset" ]] && shift
 
 
 case "$MAIN_CMD" in
 
-    describe           ) describe_role "$NEW_ROLE" "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
+    describe           ) describe_role "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
                          return $?
                          ;;
     help               ) help_role "$NEW_ROLE"
@@ -1581,11 +1585,11 @@ export DOTFILES_ALLOCATION_INDEX="${DOTFILES_ALLOCATION_INDEX:-0}"
 # Basic validation
 case "$MAIN_CMD" in
 
-    request            ) request_role  "$NEW_ROLE" "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
+    request            ) request_role  "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
                          ;;
-    release            ) release_role  "$NEW_ROLE" "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
+    release            ) release_role  "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
                          ;;
-    reset              ) release_role  "@"         "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
+    reset              ) release_role  "@"         "$NEW_ROLE_ACTION" "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
                          ;;
     
 esac
