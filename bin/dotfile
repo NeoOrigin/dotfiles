@@ -157,6 +157,24 @@ function unnormalize_role
     fi
 }
 
+function escape_regex
+{
+    if [[ $# -gt 0 ]]; then
+        echo "$1" | sed 's/[[\.*^$/]/\\&/g'
+    else
+        sed 's/[[\.*^$/]/\\&/g'
+    fi
+}
+
+function escape_regex_extended
+{
+    if [[ $# -gt 0 ]]; then
+        echo "$1" | sed 's/[[\.*^$(){}?+|/]/\\&/g'
+    else
+        sed 's/[[\.*^$/]/\\&/g'
+    fi
+}
+
 function authenticate
 {
     ####################################################################################
@@ -253,7 +271,7 @@ function describe_role
     ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_MAIN="$ROLE_PATH"
         
-    [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN=${ROLE_PATH}/main
+    [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
 
     if [[ "$USE_LINK" == "true" ]]; then
         echo
@@ -312,7 +330,7 @@ function release_role
         return 0
     fi
 
-    eval unset DOTFILES_ADD_ROLE__${NEW_ROLE_UPPER}
+    eval unset "DOTFILES_ADD_ROLE__${NEW_ROLE_UPPER}"
     export DOTFILES_ALLOCATION_INDEX=$(( DOTFILES_ALLOCATION_INDEX - 1 ))
     
     REVERSE_EVALUATION_ORDER=$( echo "${DOTFILES_EVALUATION_ORDER}" | reverse_words )
@@ -391,7 +409,7 @@ function request_role
     done
     
     export DOTFILES_ALLOCATION_INDEX=$(( DOTFILES_ALLOCATION_INDEX + 1 ))
-    eval export DOTFILES_ADD_ROLE__${NEW_ROLE_UPPER}=${DOTFILES_ALLOCATION_INDEX}
+    eval export "DOTFILES_ADD_ROLE__${NEW_ROLE_UPPER}"="${DOTFILES_ALLOCATION_INDEX}"
 }
 
 function setup_role_aliases
@@ -488,7 +506,7 @@ function setup_role_dependencies
             ROLE_MAIN="$ROLE_PATH"
             ROLE_LINK="${ROLE_PATH}/links"
             ROLE_DEPS="${ROLE_PATH}/dependencies"
-            [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN=${ROLE_PATH}/main
+            [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
             
         done
 
@@ -517,9 +535,10 @@ function setup_role_environment
         
         for PARAM in ${PARAMS}; do
         
-            line=$(grep -E "^(set|prepend|append) $PARAM " "$ROLE_ENV")
+            PARAM_SAFE=$(escape_regex_extended "$PARAM")
+            line=$(grep -E "^(set|prepend|append) ${PARAM_SAFE} " "$ROLE_ENV")
             action=$(echo "$line" | cut -d" " -f1)
-            name=$PARAM
+            name="$PARAM"
             value=$(echo "$line" | cut -d" " -f3-)
 
             case "$action" in
@@ -597,7 +616,7 @@ function setup_role_paths
     if [[ "$USE_PATHS" == "true" ]]; then
     
         [[ -d "$ROLE_BIN" ]] && export PATH="$ROLE_BIN:$PATH"
-	[[ -d "$ROLE_FUN" ]] && export FPATH="$ROLE_FUN:$FPATH"
+        [[ -d "$ROLE_FUN" ]] && export FPATH="$ROLE_FUN:$FPATH"
         [[ -d "$ROLE_LIB" ]] && export LD_LIBRARY_PATH="$ROLE_LIB:$LD_LIBRARY_PATH"
 
     fi
@@ -624,7 +643,7 @@ function setup_role_files
         for name in ${TARGETS}; do
         
             SHORT_NAME=$(basename "${name}")
-            SHORT_NAME_SAFE=$(echo "${SHORT_NAME}" | sed 's|\.|\\.|g')
+            SHORT_NAME_SAFE=$(escape_regex "${SHORT_NAME}")
             
             BASE_PATH="${HOME}"
             
@@ -819,7 +838,7 @@ function setup_role_links
         for name in ${TARGETS}; do
         
             SHORT_NAME=$(basename "${name}")
-            SHORT_NAME_SAFE=$(echo "${SHORT_NAME}" | sed 's|\.|\\.|g')
+            SHORT_NAME_SAFE=$(escape_regex_extended "${SHORT_NAME}")
 
             # Determines whether we need to create the link (ie we dont rebuild a link if it already exists)
             REBUILD_LINK=true
@@ -830,7 +849,7 @@ function setup_role_links
             CHMOD_PERMS=""
             if [[ -f "$ROLE_PATH/meta" ]]; then
             
-	    	    OVERRIDES=$(grep -E "^(chmod|link) ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta")
+                OVERRIDES=$(grep -E "^(chmod|link) ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta")
 
                 CHMOD_PERMS=$(echo "${OVERRIDES}" | grep "^chmod " | head -1 | cut -d" " -f3)
                 LINKS_LIST=$(echo "${OVERRIDES}" | grep "^link " | head -1 | cut -d" " -f3)
@@ -976,7 +995,7 @@ function teardown_role_dependencies
             ROLE_MAIN="$ROLE_PATH"
             ROLE_LINK="${ROLE_PATH}/links"
             ROLE_DEPS="${ROLE_PATH}/dependencies"
-            [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN=${ROLE_PATH}/main
+            [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
             
         done
         
@@ -1004,9 +1023,10 @@ function teardown_role_environment
         
         for PARAM in ${PARAMS}; do
         
-            line=$(grep -E "^(set|prepend|append) $PARAM " "$ROLE_ENV")
+            PARAM_SAFE=$(esacpe_regex_extended "${PARAM}")
+            line=$(grep -E "^(set|prepend|append) $PARAM_SAFE " "$ROLE_ENV")
             action=$(echo "$line" | cut -d" " -f1)
-            name=$PARAM
+            name="$PARAM"
             value=$(echo "$line" | cut -d" " -f3-)
             new_value="$value"
             
@@ -1024,7 +1044,7 @@ function teardown_role_environment
                           value_interpreted=$(eval echo "${value}")
                           new_value=$(env | grep "^${name}=" | sed "s|^${name}=||g" | sed "s|^${value_interpreted}||g")
                           
-                          export ${name}="$new_value"
+                          export "${name}"="$new_value"
                           if [[ $? -ne 0 ]]; then
                               echo "ERROR: Could not pop environment variable [${name}] from role [${ROLE_PATH}]" >&2
                               return 3
@@ -1034,7 +1054,7 @@ function teardown_role_environment
                           value_interpreted=$(eval echo "${value}")
                           new_value=$(env | grep "^${name}=" | sed "s|^${name}=||g" | sed "s|${value_interpreted}$||g")
                           
-                          export ${name}="$new_value"
+                          export "${name}"="$new_value"
                           if [[ $? -ne 0 ]]; then
                               echo "ERROR: Could not shift environment variable [${name}] from role [${ROLE_PATH}]" >&2
                               return 3
@@ -1045,7 +1065,7 @@ function teardown_role_environment
             
             # Check if user wants all unset variables to be unset or remain as blank
             if [[ "$DOTFILES_UNSET_EMPTY_VARIABLES" == "true" && -z "$new_value" ]]; then
-                unset ${name}
+                unset "${name}"
             fi
             
         done
@@ -1066,7 +1086,7 @@ function teardown_role_script
     ROLE_MAIN="$ROLE_PATH"
 
     # Incase the base path is a directory then we assume there might be a main file/script
-    [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN=${ROLE_PATH}/main
+    [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
 
     if [[ "$USE_SCRIPT" == "true" && -f "$ROLE_MAIN" ]]; then
 
@@ -1098,7 +1118,7 @@ function teardown_role_paths
     if [[ "$USE_PATHS" == "true" ]]; then
     
         [[ -d "$ROLE_BIN" ]] && export PATH=$(echo "$PATH" | sed "s|^$ROLE_BIN||g")
-	[[ -d "$ROLE_FUN" ]] && export FPATH=$(echo "$FPATH" | sed "s|^$ROLE_FUN||g")
+        [[ -d "$ROLE_FUN" ]] && export FPATH=$(echo "$FPATH" | sed "s|^$ROLE_FUN||g")
         [[ -d "$ROLE_LIB" ]] && export LD_LIBRARY_PATH=$(echo "$LD_LIBRARY_PATH" | sed "s|^$ROLE_LIB||g")
 
     fi
@@ -1318,12 +1338,13 @@ function teardown_role_links
         for name in ${TARGETS}; do
         
             SHORT_NAME=$(basename "${name}")
-            
+            SHORT_NAME_SAFE=$(escape_regex "${SHORT_NAME}")
+
             BASE_PATH="${HOME}"
             LINKS_LIST=""
             
             # Check if there is a role configuration file redirecting this link
-            [[ -f "$ROLE_PATH/meta" ]] && LINKS_LIST=$(grep -v "^link ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
+            [[ -f "$ROLE_PATH/meta" ]] && LINKS_LIST=$(grep -v "^link ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
             [[ -n "${LINKS_LIST}" ]] && BASE_PATH="${LINKS_LIST}"
             
             # Check if link already exists, if so, remove it
