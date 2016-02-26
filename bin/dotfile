@@ -92,7 +92,7 @@ function log_it
     CATEGORY="$2"
     shift 2
 
-    [[ -n "DOTFILES_LOG" ]] && echo "$(date +%Y%m%d%H%M%S): ${USER}: $$: ${CATEGORY}: $@" >> "$DOTFILES_LOG"
+    [[ -n "DOTFILES_LOG" ]] && printf "%s: %s: %s: %s: %s\n" "$(date +%Y%m%d%H%M%S)" "${USER}" $$ "${CATEGORY}" "$@" >> "$DOTFILES_LOG"
 }
 
 function reverse_lines
@@ -133,7 +133,7 @@ function normalize_role
     ####################################################################################
     
     if [[ $# -gt 0 ]]; then
-        echo "$1" | tr '[a-z]' '[A-Z]' | sed 's/[.]/__DOT__/g' | sed 's/[-]/__DASH__/g' | sed 's/[ ]/__SPACE__/g'
+        printf "%s\n" "$1" | tr '[a-z]' '[A-Z]' | sed 's/[.]/__DOT__/g' | sed 's/[-]/__DASH__/g' | sed 's/[ ]/__SPACE__/g'
     else
         tr '[a-z]' '[A-Z]' | sed 's/[.]/__DOT__/g' | sed 's/[-]/__DASH__/g' | sed 's/[ ]/__SPACE__/g'
     fi
@@ -151,7 +151,7 @@ function unnormalize_role
     ####################################################################################
     
     if [[ $# -gt 0 ]]; then
-        echo "$1" | sed 's/__SPACE__/ /g' | sed 's/__DASH__/-/g' | sed 's/__DOT__/./g' | tr '[A-Z]' '[a-z]'
+        printf "%s\n" "$1" | sed 's/__SPACE__/ /g' | sed 's/__DASH__/-/g' | sed 's/__DOT__/./g' | tr '[A-Z]' '[a-z]'
     else
         sed 's/__SPACE__/ /g' | sed 's/__DASH__/-/g' | sed 's/__DOT__/./g' | tr '[A-Z]' '[a-z]'
     fi
@@ -160,7 +160,7 @@ function unnormalize_role
 function escape_regex
 {
     if [[ $# -gt 0 ]]; then
-        echo "$1" | sed 's/[[\.*^$/]/\\&/g'
+        printf "%s\n" "$1" | sed 's/[[\.*^$/]/\\&/g'
     else
         sed 's/[[\.*^$/]/\\&/g'
     fi
@@ -169,7 +169,7 @@ function escape_regex
 function escape_regex_extended
 {
     if [[ $# -gt 0 ]]; then
-        echo "$1" | sed 's/[[\.*^$(){}?+|/]/\\&/g'
+        printf "%s\n" "$1" | sed 's/[[\.*^$(){}?+|/]/\\&/g'
     else
         sed 's/[[\.*^$/]/\\&/g'
     fi
@@ -200,24 +200,24 @@ function validate_role
     NEW_ROLE="$1"
     ROLE_LIST="$2"
 
-    ROLE_FOUND=$(echo "$ROLE_LIST" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_FOUND=$(printf "%s\n" "$ROLE_LIST" | grep -i ".*/${NEW_ROLE}$" | head -1 )
 
     if [[ -z "${ROLE_FOUND}" ]]; then
-        echo "ERROR: Role [${NEW_ROLE}] is unrecognised, use $DOTFILES_HOME/dotfile list to print out supported roles" >&2
+        printf "%s: Role [%s] is unrecognised, use %s to print out supported roles\n" ERROR "$NEW_ROLE" "$DOTFILES_HOME/dotfile list" >&2
         return 2
     fi
 
     "${DOTFILES_AUTHENTICATE_PATH:-true}" "$USER"
     if [[ $? -ne 0 ]]; then
         log_it ERROR REQUEST "$NEW_ROLE"
-        echo "ERROR: Could not authenticate user [$USER].  Exiting" >&2
+        printf "%s: Could not authenticate user [%s].  Exiting\n" ERROR "$USER" >&2
         return 5
     fi
 
     "${DOTFILES_AUTHORIZE_PATH:-true}" "$USER" "$NEW_ROLE"
     if [[ $? -ne 0 ]]; then
         log_it ERROR REQUEST "$NEW_ROLE"
-        echo "ERROR: User [$USER] is not granted access to role [$NEW_ROLE].  Exiting" >&2
+        printf "%s: User [%s] is not granted access to role [%s].  Exiting\n" ERROR "$USER" "$NEW_ROLE" >&2
         return 6
     fi
 
@@ -228,7 +228,7 @@ function help_role
 {
     NEW_CMD="$1"
 
-    NEW_CMD_UPPER=$(echo "$NEW_CMD" | tr '[a-z]' '[A-Z]')
+    NEW_CMD_UPPER=$(printf "%s\n" "$NEW_CMD" | tr '[a-z]' '[A-Z]')
     
     case "$NEW_CMD_UPPER" in
     
