@@ -269,13 +269,13 @@ function describe_role
     
     validate_role "${NEW_ROLE}" "$ROLE_LIST" || return $?
 
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$( printf "%s\n" "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_MAIN="$ROLE_PATH"
         
     [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
 
     if [[ "$USE_LINK" == "true" ]]; then
-        echo
+        :
     fi
 
     if [[ "$USE_DEPS" == "true" ]]; then
@@ -421,11 +421,13 @@ function setup_role_aliases
     NEW_ROLE="$2"
     ROLE_LIST="$3"
     
+    [[ "$USE_ALIASES" == "false" ]] && return 0
+    
     ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_ALIASES="$ROLE_PATH/aliases"
     
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
-    if [[ "$USE_ALIASES" == "true" && -f "$ROLE_ALIASES" ]]; then
+    if [[ -f "$ROLE_ALIASES" ]]; then
     
         # Cant use pipes as the while loop becomes a subshell in bash, variables etc are not exposed
         #cat "$ROLE_ALIASES" | grep -v "^#" | grep -v "^$" | while read -r name value; do
@@ -461,16 +463,18 @@ function setup_role_dependencies
     USE_ALIASES="$8"
     USE_SCRIPT="$9"
     
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    [[ "$USE_DEPS" == "false" ]] && return 0
+    
+    ROLE_PATH=$( printf "%s\n" "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_DEPS="$ROLE_PATH/dependencies"
 
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
-    if [[ "$USE_DEPS" == "true" && -f "$ROLE_DEPS" ]]; then
+    if [[ -f "$ROLE_DEPS" ]]; then
     
         DEPS_LIST=$(grep "^role " "$ROLE_DEPS" | sed 's/ /,/g')
         
         for DEP_ROLE in ${DEPS_LIST}; do
-            ROLE_NAME=$(echo "${DEP_ROLE}" | cut -d, -f2)
+            ROLE_NAME=$(printf "%s\n" "${DEP_ROLE}" | cut -d, -f2)
 
             NOENV=""
             NOLINK=""
@@ -493,7 +497,7 @@ function setup_role_dependencies
                           
             . $DOTFILES_HOME/bin/dotfile ${NOENV} ${NOLINK} ${NOPATH} ${NOFILE} ${NOALIASES} ${NOSCRIPT} ${USEDEBUG} ${USETRACE} request "${ROLE_NAME}"
             if [[ $? -ne 0 ]]; then
-                echo "ERROR: Could not add dependency [${ROLE_NAME}] from role [${ROLE_PATH}]" >&2
+                printf "%s: Could not add dependency [%s] from role [%s]\n" ERROR "$ROLE_NAME" "$ROLE_PATH" >&2
                 return 3
             fi
             
@@ -503,9 +507,9 @@ function setup_role_dependencies
             ROLE_LIST="$3"
             USE_ENV="$4"
             USE_LINK="$5"
-            NEW_ROLE_UPPER=$(echo "${NEW_ROLE}" | normalize_role)
+            NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
             
-            ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+            ROLE_PATH=$( printf "%s\n" "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
             ROLE_MAIN="$ROLE_PATH"
             ROLE_LINK="${ROLE_PATH}/links"
             ROLE_DEPS="${ROLE_PATH}/dependencies"
@@ -524,12 +528,14 @@ function setup_role_environment
     NEW_ROLE="$2"
     ROLE_LIST="$3"
     
+    [[ "$USE_ENV" == "false" ]] && return 0
+    
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
     ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_ENV="$ROLE_PATH/env"
     
     # last step is to inherit the environment if configured and there is an executable file
-    if [[ "$USE_ENV" == "true" && -f "$ROLE_ENV" ]]; then
+    if [[ -f "$ROLE_ENV" ]]; then
 
         # Need to remove the need for a while loop as this spawns a subshell in POSIX / bash so the exports arent exposed
         #cat "$ROLE_ENV" | grep -v "^#" | grep -v "^$" | while read -r action name value; do
@@ -580,6 +586,8 @@ function setup_role_script
     NEW_ROLE="$2"
     ROLE_LIST="$3"
     
+    [[ "$USE_SCRIPT" == "false" ]] && return 0
+    
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
     ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_MAIN="$ROLE_PATH"
@@ -589,7 +597,7 @@ function setup_role_script
 
     
     # last step is to inherit the environment if configured and there is an executable file
-    if [[ "$USE_SCRIPT" == "true" && -f "$ROLE_MAIN" ]]; then
+    if [[ -f "$ROLE_MAIN" ]]; then
 
         ${DEBUG} && log_it DEBUG CALL ". ${ROLE_MAIN} --setup"
         . "${ROLE_MAIN}" --setup
@@ -918,11 +926,13 @@ function teardown_role_aliases
     NEW_ROLE="$2"
     ROLE_LIST="$3"
     
+    [[ "$USE_ALIASES" == "false" ]] && return 0
+    
     ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_ALIASES="$ROLE_PATH/aliases"
     
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
-    if [[ "$USE_ALIASES" == "true" && -f "$ROLE_ALIASES" ]]; then
+    if [[ -f "$ROLE_ALIASES" ]]; then
     
         # Cant use pipes as the while loop becomes a subshell in bash, variables etc are not exposed
         #cat "$ROLE_ALIASES" | grep -v "^#" | grep -v "^$" | while read -r name value; do
@@ -951,11 +961,13 @@ function teardown_role_dependencies
     USE_ALIASES="$8"
     USE_SCRIPT="$9"
     
+    [[ "$USE_DEPS" == "false" ]] && return 0
+    
     ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_DEPS="$ROLE_PATH/dependencies"
     
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
-    if [[ "$USE_DEPS" == "true" && -f "$ROLE_DEPS" ]]; then
+    if [[ -f "$ROLE_DEPS" ]]; then
     
         DEPS_LIST=$(grep "^role " "$ROLE_DEPS" | sed 's/ /,/g' | reverse_lines)
         
@@ -1012,12 +1024,14 @@ function teardown_role_environment
     USE_ENV="$1"
     NEW_ROLE="$2"
     ROLE_LIST="$3"
+    
+    [[ "$USE_ENV == "false" ]] && return 0
 
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
     ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_ENV="$ROLE_PATH/env"
 
-    if [[ "$USE_ENV" == "true" && -f "$ROLE_ENV" ]]; then
+    if [[ -f "$ROLE_ENV" ]]; then
 
         # Need to remove the need for a while loop as this spawns a subshell in POSIX / bash so the exports arent exposed
         #cat "$ROLE_ENV" | grep -v "^#" | grep -v "^$" | while read -r action name value; do
@@ -1083,6 +1097,8 @@ function teardown_role_script
     USE_SCRIPT="$1"
     NEW_ROLE="$2"
     ROLE_LIST="$3"
+    
+    [[ "$USE_SCRIPT" == "false" ]] && return 0
 
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
     ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
@@ -1091,7 +1107,7 @@ function teardown_role_script
     # Incase the base path is a directory then we assume there might be a main file/script
     [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
 
-    if [[ "$USE_SCRIPT" == "true" && -f "$ROLE_MAIN" ]]; then
+    if [[ -f "$ROLE_MAIN" ]]; then
 
         ${DEBUG} && log_it DEBUG CALL ". ${ROLE_MAIN} --teardown"
         . "${ROLE_MAIN}" --teardown
@@ -1136,11 +1152,13 @@ function teardown_role_files
     NEW_ROLE="$2"
     ROLE_LIST="$3"
     
+    [[ "$USE_FILE" == "false" ]] && return 0
+    
     ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_FILE="$ROLE_PATH/files"
     
     # First step is to create links if configured and the role contains them
-    if [[ "$USE_FILE" == "true" && -d "${ROLE_FILE}" ]]; then
+    if [[ -d "${ROLE_FILE}" ]]; then
     
         TARGETS=$(find "$ROLE_FILE" -maxdepth 1 -mindepth 1 2>/dev/null | reverse_lines)
         
@@ -1328,11 +1346,13 @@ function teardown_role_links
     NEW_ROLE="$2"
     ROLE_LIST="$3"
     
+    [[ "$USE_LINK" == "false" ]] && return 0
+    
     ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_LINK="$ROLE_PATH/links"
     
     # First step is to create links if configured and the role contains them
-    if [[ "$USE_LINK" == "true" && -d "${ROLE_LINK}" ]]; then
+    if [[ -d "${ROLE_LINK}" ]]; then
     
         TARGETS=$(find "$ROLE_LINK" -maxdepth 1 -mindepth 1 2>/dev/null | reverse_lines)
         
