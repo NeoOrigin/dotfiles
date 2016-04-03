@@ -9,6 +9,12 @@
 #####################################################################################################################
 
 
+#-- Constants -------------------------------------------------------------------------------------------------------
+
+ERR_UNKNOWN_CMD=1
+SUCCESS=0
+
+
 #-- Functions -------------------------------------------------------------------------------------------------------
 
 function usage
@@ -232,19 +238,22 @@ function help_role
     
     case "$NEW_CMD_UPPER" in
     
-        REQUEST  ) echo "Adds a role to the users account"
+        REQUEST  ) printf "%s\n" "Adds a role to the users account"
                    ;;
-        RELEASE  ) echo "Removes a role to the users account"
+        RELEASE  ) printf "%s\n" "Removes a role to the users account"
                    ;;
-        RESET    ) echo "Removes all roles from the users account"
+        RESET    ) printf "%s\n" "Removes all roles from the users account"
                    ;;
-        DESCRIBE ) echo "Outputs summary information regarding a role"
+        DESCRIBE ) printf "%s\n" "Outputs summary information regarding a role"
                    ;;
-        LIST     ) echo "Outputs what roles are available"
+        LIST     ) printf "%s\n" "Outputs what roles are available"
                    ;;
         HELP     ) usage
                    ;;
-        *       ) 
+        *       )  usage >&2
+                   return 1
+                   ;;
+        
     esac
 
     return 0
@@ -1348,7 +1357,7 @@ function teardown_role_links
     
     [[ "$USE_LINK" == "false" ]] && return 0
     
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$( printf "%s\n" "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
     ROLE_LINK="$ROLE_PATH/links"
     
     # First step is to create links if configured and the role contains them
@@ -1404,11 +1413,11 @@ then
         . "${DOTFILES_CONFIG}"
         if [[ $? -ne 0 ]]
         then
-            echo "ERROR: Could not source '${DOTFILES_CONFIG}'.  This is defined in the environment variable DOTFILES_CONFIG.  Exiting" >&2
+            printf "%s: Could not source '%s'.  This is defined in the environment variable %s.  Exiting\n" ERROR "$DOTFILES_CONFIG" DOTFILES_CONFIG >&2
             return 1
         fi
     else
-        echo "ERROR: Could not source '${DOTFILES_CONFIG}'.  This is defined in the environment variable DOTFILES_CONFIG but does not exist.  Exiting" >&2
+        printf "%s: Could not source '%s'.  This is defined in the environment variable %s but does not exist.  Exiting\n" ERROR "$DOTFILES_CONFIG" DOTFILES_CONFIG >&2
         return 1
     fi
 fi
@@ -1419,7 +1428,7 @@ then
     . "$HOME/.dotfiles.cfg"
     if [[ $? -ne 0 ]]
     then
-        echo "ERROR: Could not source '${HOME}/.dotfiles.cfg'.  Exiting" >&2
+        printf "%s: Could not source '%s'.  Exiting\n" ERROR "$HOME/.dotfiles.cfg" >&2
         return 1
     fi
 fi
@@ -1429,7 +1438,7 @@ then
     . "$DOTFILES_HOME/etc/dotfiles.cfg"
     if [[ $? -ne 0 ]]
     then
-        echo "ERROR: Could not source '${DOTFILES_HOME}/etc/dotfiles.cfg'.  Exiting" >&2
+        printf "%s: Could not source '%s'.  Exiting\n" ERROR "${DOTFILES_HOME}/etc/dotfiles.cfg" >&2
         return 1
     fi
 fi
@@ -1439,7 +1448,7 @@ then
     . "$DOTFILES_ADMIN_CONFIG"
     if [[ $? -ne 0 ]]
     then
-        echo "ERROR: Could not source '${DOTFILES_ADMIN_CONFIG}'.  Exiting" >&2
+        printf "ERROR: Could not source '%s'.  Exiting\n" ERROR "${DOTFILES_ADMIN_CONFIG}" >&2
         return 1
     fi
 fi
@@ -1454,7 +1463,7 @@ fi
 
 # Check if the log is writeable
 if [[ ! -r "$DOTFILES_LOG" ]]; then
-    echo "ERROR: The value of DOTFILES_LOG [$DOTFILES_LOG] is not readable.  Exiting" >&2
+    printf "%s: The value of %s [%s] is not readable.  Exiting\n" ERROR DOTFILES_LOG "$DOTFILES_LOG" >&2
     return 1
 fi
 
@@ -1564,10 +1573,10 @@ case "$MAIN_CMD" in
     list               ) ;;
     help               ) ;;
     -h | --help        ) usage
-                         return 0
+                         return $SUCCESS
                          ;;
     *                  ) usage >&2
-                         return 1
+                         return $ERR_UNKNOWN_CMD
                          ;;
     
 esac
@@ -1616,4 +1625,4 @@ esac
 
 [[ "${DOTFILES_ALLOCATION_INDEX}" -le 0 ]] && unset DOTFILES_ALLOCATION_INDEX
 
-return 0
+return $SUCCESS
