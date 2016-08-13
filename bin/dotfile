@@ -131,7 +131,7 @@ function normalize_role
 {
     ####################################################################################
     #
-    # Description:  Converts afile system role name into an environment parameter based
+    # Description:  Converts a filesystem role name into an environment parameter based
     #               role name (file system names can contain a signficantly wider
     #               set of characters.  
     # Parameters:   1 - Optional. The role name to normalize, uses stdin if not set
@@ -181,6 +181,14 @@ function escape_regex_extended
     fi
 }
 
+function get_role_path
+{
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+    
+    printf "%s\n" "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1
+}
+
 function authenticate
 {
     ####################################################################################
@@ -206,7 +214,7 @@ function validate_role
     NEW_ROLE="$1"
     ROLE_LIST="$2"
 
-    ROLE_FOUND=$(printf "%s\n" "$ROLE_LIST" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_FOUND=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
 
     if [[ -z "${ROLE_FOUND}" ]]; then
         printf "%s: Role [%s] is unrecognised, use %s to print out supported roles\n" ERROR "$NEW_ROLE" "$DOTFILES_HOME/dotfile list" >&2
@@ -240,7 +248,7 @@ function help_role
     
         REQUEST  ) printf "%s\n" "Adds a role to the users account"
                    ;;
-        RELEASE  ) printf "%s\n" "Removes a role to the users account"
+        RELEASE  ) printf "%s\n" "Removes a role from the users account"
                    ;;
         RESET    ) printf "%s\n" "Removes all roles from the users account"
                    ;;
@@ -278,7 +286,7 @@ function describe_role
     
     validate_role "${NEW_ROLE}" "$ROLE_LIST" || return $?
 
-    ROLE_PATH=$( printf "%s\n" "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_MAIN="$ROLE_PATH"
         
     [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
@@ -430,9 +438,11 @@ function setup_role_aliases
     NEW_ROLE="$2"
     ROLE_LIST="$3"
     
+    # Quick exit if no aliases used
     [[ "$USE_ALIASES" == "false" ]] && return 0
     
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    # Find the role in our global roles list, it should be a leaf directory
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_ALIASES="$ROLE_PATH/aliases"
     
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
@@ -446,12 +456,13 @@ function setup_role_aliases
         # Go through all alias names, grab their value and create the alias
         for ALIAS_DEF in ${ALIASES}; do
         
+            # Escape, suitable for grep
             name=$(echo "$ALIAS_DEF" | sed 's|\.|\\.|g')
-            value=$(grep "^$name " "$ROLE_ALIASES" | cut -d" " -f2-)
+            value=$(grep "^$name " "$ROLE_ALIASES" | tail -1 | cut -d" " -f2-)
 
             eval alias -- "${ALIAS_DEF}"="'${value}'"
             if [[ $? -ne 0 ]]; then
-                echo "ERROR: Could not create alias [${ALIAS_DEF}] from role [${ROLE_PATH}]" >&2
+                printf "%s: Could not create alias [%s] from role [%s]\n" ERROR "${ALIAS_DEF}" "${ROLE_PATH}" >&2
                 return 3
             fi
 
@@ -472,9 +483,10 @@ function setup_role_dependencies
     USE_ALIASES="$8"
     USE_SCRIPT="$9"
     
+    # Quick exit if no known dependencies
     [[ "$USE_DEPS" == "false" ]] && return 0
     
-    ROLE_PATH=$( printf "%s\n" "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_DEPS="$ROLE_PATH/dependencies"
 
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
@@ -518,7 +530,7 @@ function setup_role_dependencies
             USE_LINK="$5"
             NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
             
-            ROLE_PATH=$( printf "%s\n" "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+            ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
             ROLE_MAIN="$ROLE_PATH"
             ROLE_LINK="${ROLE_PATH}/links"
             ROLE_DEPS="${ROLE_PATH}/dependencies"
@@ -540,7 +552,7 @@ function setup_role_environment
     [[ "$USE_ENV" == "false" ]] && return 0
     
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_ENV="$ROLE_PATH/env"
     
     # last step is to inherit the environment if configured and there is an executable file
@@ -598,7 +610,7 @@ function setup_role_script
     [[ "$USE_SCRIPT" == "false" ]] && return 0
     
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_MAIN="$ROLE_PATH"
     
     # Incase the base path is a directory then we assume there might be a main file/script
@@ -628,7 +640,7 @@ function setup_role_paths
     ROLE_LIST="$3"
 
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_BIN="$ROLE_PATH/bin"
     ROLE_LIB="$ROLE_PATH/lib"
     ROLE_FUN="$ROLE_PATH/funcs"
@@ -650,7 +662,7 @@ function setup_role_files
     NEW_ROLE="$2"
     ROLE_LIST="$3"
     
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_FILE="$ROLE_PATH/files"
     
     # First step is to create links if configured and the role contains them
@@ -845,7 +857,7 @@ function setup_role_links
     NEW_ROLE="$2"
     ROLE_LIST="$3"
     
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_LINK="$ROLE_PATH/links"
     
     # First step is to create links if configured and the role contains them
@@ -937,7 +949,7 @@ function teardown_role_aliases
     
     [[ "$USE_ALIASES" == "false" ]] && return 0
     
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_ALIASES="$ROLE_PATH/aliases"
     
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
@@ -972,7 +984,7 @@ function teardown_role_dependencies
     
     [[ "$USE_DEPS" == "false" ]] && return 0
     
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_DEPS="$ROLE_PATH/dependencies"
     
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
@@ -1015,7 +1027,7 @@ function teardown_role_dependencies
             USE_LINK="$5"
             NEW_ROLE_UPPER=$(echo "${NEW_ROLE}" | normalize_role)
             
-            ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+            ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
             ROLE_MAIN="$ROLE_PATH"
             ROLE_LINK="${ROLE_PATH}/links"
             ROLE_DEPS="${ROLE_PATH}/dependencies"
@@ -1037,7 +1049,7 @@ function teardown_role_environment
     [[ "$USE_ENV == "false" ]] && return 0
 
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_ENV="$ROLE_PATH/env"
 
     if [[ -f "$ROLE_ENV" ]]; then
@@ -1110,7 +1122,7 @@ function teardown_role_script
     [[ "$USE_SCRIPT" == "false" ]] && return 0
 
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_MAIN="$ROLE_PATH"
 
     # Incase the base path is a directory then we assume there might be a main file/script
@@ -1138,7 +1150,7 @@ function teardown_role_paths
     ROLE_LIST="$3"
 
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_BIN="$ROLE_PATH/bin"
     ROLE_LIB="$ROLE_PATH/lib"
     ROLE_FUN="$ROLE_PATH/funcs"
@@ -1163,7 +1175,7 @@ function teardown_role_files
     
     [[ "$USE_FILE" == "false" ]] && return 0
     
-    ROLE_PATH=$( echo "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_FILE="$ROLE_PATH/files"
     
     # First step is to create links if configured and the role contains them
@@ -1357,7 +1369,7 @@ function teardown_role_links
     
     [[ "$USE_LINK" == "false" ]] && return 0
     
-    ROLE_PATH=$( printf "%s\n" "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1 )
+    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_LINK="$ROLE_PATH/links"
     
     # First step is to create links if configured and the role contains them
