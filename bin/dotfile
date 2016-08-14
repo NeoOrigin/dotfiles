@@ -13,6 +13,11 @@
 
 ERR_UNKNOWN_CMD=1
 ERR_INVALID_LOG_PATH=2
+ERR_ROLE_NOT_FOUND=3
+
+ERR_AUTHENTICATION_FAILED=10
+ERR_AUTHORIZATION_FAILED=20
+
 SUCCESS=0
 
 
@@ -100,6 +105,11 @@ function log_it
     shift 2
 
     [[ -n "DOTFILES_LOG" ]] && printf "%s: %s: %s: %s: %s\n" "$(date +%Y%m%d%H%M%S)" "${USER}" $$ "${CATEGORY}" "$@" >> "$DOTFILES_LOG"
+}
+
+function get_env
+{
+    env
 }
 
 function reverse_lines
@@ -190,6 +200,14 @@ function get_role_path
     printf "%s\n" "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1
 }
 
+function list_roles
+{
+    ROLES_PATH="$1"
+    
+    # Find all roles installed on the machine / in known paths
+    printf "%s\n" "${ROLES_PATH}" | sed 's/:/\n/g' | xargs -i find {} -maxdepth 1 -mindepth 1 2>/dev/null
+}
+
 function authenticate
 {
     ####################################################################################
@@ -199,7 +217,7 @@ function authenticate
     # 
     ####################################################################################
     
-    return 0
+    return $SUCCESS
 }
 
 function validate_role
@@ -219,24 +237,24 @@ function validate_role
 
     if [[ -z "${ROLE_FOUND}" ]]; then
         printf "%s: Role [%s] is unrecognised, use %s to print out supported roles\n" ERROR "$NEW_ROLE" "$DOTFILES_HOME/dotfile list" >&2
-        return 2
+        return $ERR_ROLE_NOT_FOUND
     fi
 
     "${DOTFILES_AUTHENTICATE_PATH:-true}" "$USER"
     if [[ $? -ne 0 ]]; then
         log_it ERROR REQUEST "$NEW_ROLE"
         printf "%s: Could not authenticate user [%s].  Exiting\n" ERROR "$USER" >&2
-        return 5
+        return $ERR_AUTHENTICATION_FAILED
     fi
 
     "${DOTFILES_AUTHORIZE_PATH:-true}" "$USER" "$NEW_ROLE"
     if [[ $? -ne 0 ]]; then
         log_it ERROR REQUEST "$NEW_ROLE"
         printf "%s: User [%s] is not granted access to role [%s].  Exiting\n" ERROR "$USER" "$NEW_ROLE" >&2
-        return 6
+        return $ERR_AUTHORIZATION_FAILED
     fi
 
-    return 0
+    return $SUCCESS
 }
 
 function help_role
@@ -260,12 +278,12 @@ function help_role
         HELP     ) usage
                    ;;
         *       )  usage >&2
-                   return 1
+                   return $ERR_UNKNOWN_CMD
                    ;;
         
     esac
 
-    return 0
+    return $SUCCESS
 }
 
 function describe_role
@@ -289,7 +307,9 @@ function describe_role
 
     ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_MAIN="$ROLE_PATH"
-        
+    
+    # A role can be a script, however typically its a directory
+    # defined with an entrypoint of main
     [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
 
     if [[ "$USE_LINK" == "true" ]]; then
@@ -324,18 +344,19 @@ function release_role
     # Normalize for easier pattern matching etc
     NEW_ROLE_UPPER=$(normalize_role "${NEW_ROLE}")
     
+    # Check for shortcut of releasing all
     if [[ "${NEW_ROLE}" == "@" ]]; then
     
         # set -A APPLIED_ROLE $(env) etc is non posix compliant
         
-        APPLIED_ROLE=($(env | grep "^DOTFILES_ADD_ROLE__" | cut -d"_" -f5- | unnormalize_role | sed 's/=/ /g' | sort -k2,2 -nr))
+        APPLIED_ROLE=($(get_env | grep "^DOTFILES_ADD_ROLE__" | cut -d"_" -f5- | unnormalize_role | sed 's/=/ /g' | sort -k2,2 -nr))
         #echo "1: #: ${#APPLIED_ROLE[@]}: 0: ${APPLIED_ROLE[0]}: NEW_ROLE: ${NEW_ROLE}"
         
         while [[ "${#APPLIED_ROLE[@]}" -gt 0 ]]; do
 
             release_role "${APPLIED_ROLE[0]}" "${NEW_ROLE_ACTION}" "${ROLE_LIST}" "${USE_ENV}" "${USE_LINK}" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT" || return $?
 
-            APPLIED_ROLE=($(env | grep "^DOTFILES_ADD_ROLE__" | cut -d"_" -f5- | unnormalize_role | sed 's/=/ /g' | sort -k2,2 -nr))
+            APPLIED_ROLE=($(get_env | grep "^DOTFILES_ADD_ROLE__" | cut -d"_" -f5- | unnormalize_role | sed 's/=/ /g' | sort -k2,2 -nr))
 
         done
         
@@ -345,7 +366,7 @@ function release_role
     validate_role "${NEW_ROLE}" "$ROLE_LIST" || return $?
     
     # Exit if role is not ready to be released (strict ordering is important)
-    ROLE_INDEX=$(env | grep "^DOTFILES_ADD_ROLE__${NEW_ROLE_UPPER}=" | cut -d"=" -f2)
+    ROLE_INDEX=$(get_env | grep "^DOTFILES_ADD_ROLE__${NEW_ROLE_UPPER}=" | cut -d"=" -f2)
     if [[ "${DOTFILES_ALLOCATION_INDEX}" -ne "${ROLE_INDEX}" ]]; then
         return 0
     fi
@@ -398,7 +419,7 @@ function request_role
     validate_role "${NEW_ROLE}" "$ROLE_LIST" || return $?
     
     # Exit if role is already defined, we dont request a role already granted
-    ROLE_EXISTS=$(env | grep "^DOTFILES_ADD_ROLE__${NEW_ROLE_UPPER}=")
+    ROLE_EXISTS=$(get_env | grep "^DOTFILES_ADD_ROLE__${NEW_ROLE_UPPER}=")
     if [[ -n "${ROLE_EXISTS}" ]]; then
         return 0
     fi
@@ -625,7 +646,7 @@ function setup_role_script
         . "${ROLE_MAIN}" --setup
 
         if [[ $? -ne 0 ]]; then
-            echo "ERROR: Could not run script from role [${ROLE_PATH}]" >&2
+            printf "%s: Could not run script from role [%s]\n" ERROR "${ROLE_PATH}" >&2
             return 3
         fi
 
@@ -816,7 +837,7 @@ function setup_role_files
                 ${DEBUG} && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
                 rm -f "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    echo "ERROR: Could not remove file from role [${ROLE_PATH}]" >&2
+                    printf "%s: Could not remove file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
                     return 4
                 fi
                 
@@ -826,7 +847,7 @@ function setup_role_files
                 
                 # Record that we are now managing this file
                 ${DEBUG} && log_it DEBUG COPYING "echo '${SHORT_NAME} ${ACTUAL_VALUE} ${name}' >> '${BASE_PATH}/.dotfile.managed'"
-                echo "${SHORT_NAME} ${ACTUAL_VALUE} ${name}" >> "${BASE_PATH}/.dotfile.managed"
+                printf "%s %s %s\n" "${SHORT_NAME}" "${ACTUAL_VALUE}" "${name}" >> "${BASE_PATH}/.dotfile.managed"
                 if [[ $? -ne 0 ]]; then
                     echo "ERROR: Could not add metadata to [${BASE_PATH}/${SHORT_NAME}] to manage file copy from role [${ROLE_PATH}]" >&2
                     return 5
@@ -839,7 +860,7 @@ function setup_role_files
                 ${DEBUG} && log_it DEBUG COPYING "cp --recursive --archive '${name}' '${BASE_PATH}/${SHORT_NAME}'"
                 cp --recursive --archive "${name}" "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    echo "ERROR: Could not add file from role [${ROLE_PATH}]" >&2
+                    printf "%s: Could not add file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
                     return 5
                 fi
                 
@@ -1596,7 +1617,7 @@ case "$MAIN_CMD" in
 esac
 
 # Find all roles installed on the machine / in known paths
-ROLE_LIST=$( echo "${DOTFILES_ROLES_PATH}" | sed 's/:/\n/g' | xargs -i find {} -maxdepth 1 -mindepth 1 2>/dev/null )
+ROLE_LIST=$( list_roles "${DOTFILES_ROLES_PATH}" )
 
 # Very lightweight functionality that doesnt need to know of current role state etc
 if [[ "$MAIN_CMD" == "list" ]]; then
@@ -1606,8 +1627,8 @@ fi
 
 # Further commands interact directly with an already allocated role or a specific one that needs querying, reset is an exception as it has no arguments
 # however due to its implementation We call it like any other
-NEW_ROLE=$(echo "$2" | cut -d":" -f1)
-NEW_ROLE_ACTION=$(echo "$2" | cut -d":" -f2)
+NEW_ROLE=$(        echo "$2" | cut -d":" -f1)
+NEW_ROLE_ACTION=$( echo "$2" | cut -d":" -f2)
 [[ "$MAIN_CMD" != "reset" ]] && shift
 
 
@@ -1637,6 +1658,7 @@ case "$MAIN_CMD" in
     
 esac
 
+# Remove if becomes unnecessary
 [[ "${DOTFILES_ALLOCATION_INDEX}" -le 0 ]] && unset DOTFILES_ALLOCATION_INDEX
 
 return $SUCCESS
