@@ -489,18 +489,21 @@ function release_role
     
         # set -A APPLIED_ROLE $(env) etc is non posix compliant
         
+        # get all applied roles and sort into applied order
         APPLIED_ROLE=($(get_env | grep "^DOTFILES_ADD_ROLE__" | cut -d"_" -f5- | unnormalize_role | sed 's/=/ /g' | sort -k2,2 -nr))
         #echo "1: #: ${#APPLIED_ROLE[@]}: 0: ${APPLIED_ROLE[0]}: NEW_ROLE: ${NEW_ROLE}"
         
         while [[ "${#APPLIED_ROLE[@]}" -gt 0 ]]; do
 
+            # release the last applied role
             release_role "${APPLIED_ROLE[0]}" "${NEW_ROLE_ACTION}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
 
+            # refresh roles still applied and sort in applied order
             APPLIED_ROLE=($(get_env | grep "^DOTFILES_ADD_ROLE__" | cut -d"_" -f5- | unnormalize_role | sed 's/=/ /g' | sort -k2,2 -nr))
 
         done
         
-        return 0
+        return $SUCCESS
     fi
 
     validate_role "${NEW_ROLE}" "$ROLE_LIST" || return $?
@@ -516,7 +519,7 @@ function release_role
     export DOTFILES_ALLOCATION_INDEX=$(( DOTFILES_ALLOCATION_INDEX - 1 ))
     
     # Perform stages in reverse order, e.g. if it was A B C D, now its D C B A
-    REVERSE_EVALUATION_ORDER=$( printf "%s\n" "${DOTFILES_EVALUATION_ORDER}" | reverse_words )
+    REVERSE_EVALUATION_ORDER=$( printf "%s\n" "${DOTFILES_EVALUATION_ORDER}" | reverse_words | tr '[A-Z]' '[a-z]')
     for STAGE in ${REVERSE_EVALUATION_ORDER}; do
     
         case "${STAGE}" in
@@ -598,8 +601,10 @@ function request_role
     # First step is to create links if configured and the role contains them
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
     # last step is to inherit the environment if configured and there is an executable file
-    for STAGE in ${DOTFILES_EVALUATION_ORDER}; do
-
+    EVAL_ORDER=$(printf "%s\n" "${DOTFILES_EVALUATION_ORDER}" | tr '[A-Z]' '[a-z]')
+    
+    for STAGE in ${EVAL_ORDER}; do
+        
         case "${STAGE}" in
         
             aliases      ) setup_role_aliases      --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
