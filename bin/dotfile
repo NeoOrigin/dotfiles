@@ -96,7 +96,7 @@ function log_it
     #               * - The message
     # Requires:     USER         - The login name of the current user
     #               DOTFILES_LOG - The path to a log file to write to
-    #               3 -Used for identification the pid of the process being run
+    #               3 - Used for identification the pid of the process being run
     # 
     ####################################################################################
 
@@ -110,6 +110,19 @@ function log_it
 function get_env
 {
     env
+}
+
+function read_config
+{
+    ####################################################################################
+    #
+    # Description:  Outputs the contents of a config file, this will strip out blank
+    #               linse and comments
+    # Parameters:   The config file to read
+    # 
+    ####################################################################################
+
+    grep -v "^#" "$1" | grep -v "^\$"
 }
 
 function reverse_lines
@@ -176,6 +189,15 @@ function unnormalize_role
 
 function escape_regex
 {
+    ####################################################################################
+    #
+    # Description:  Escapes some commonly used characters used within simple regular
+    #               expression matching (i.e. grep).  This is so user entered values
+    #               cannot subvert a matching attempt
+    # Parameters:   1 - The value to escape
+    # 
+    ####################################################################################
+    
     if [[ $# -gt 0 ]]; then
         printf "%s\n" "$1" | sed 's/[[\.*^$/]/\\&/g'
     else
@@ -185,6 +207,15 @@ function escape_regex
 
 function escape_regex_extended
 {
+    ####################################################################################
+    #
+    # Description:  Escapes some commonly used characters used within extended regular
+    #               expression matching (i.e. perl or egrep).  This is so user entered
+    #               values cannot subvert a matching attempt
+    # Parameters:   1 - The value to escape
+    # 
+    ####################################################################################
+    
     if [[ $# -gt 0 ]]; then
         printf "%s\n" "$1" | sed 's/[[\.*^$(){}?+|/]/\\&/g'
     else
@@ -194,6 +225,14 @@ function escape_regex_extended
 
 function get_role_path
 {
+    ####################################################################################
+    #
+    # Description:  Given a role name, returns its full path (if any)
+    # Parameters:   1 - The name of the role to check for
+    #               2 - The system delimited path to check
+    # 
+    ####################################################################################
+    
     NEW_ROLE="$1"
     ROLE_LIST="$2"
 
@@ -202,6 +241,13 @@ function get_role_path
 
 function list_roles
 {
+    ####################################################################################
+    #
+    # Description:  Returns all roles found on the path
+    # Parameters:   1 - The system delimited path-like variable to check against
+    # 
+    ####################################################################################
+    
     ROLES_PATH="$1"
 
     # Find all roles installed on the machine / in known paths
@@ -292,13 +338,42 @@ function describe_role
     NEW_ROLE="$1"
     NEW_ROLE_ACTION="$2"
     ROLE_LIST="$3"
-    USE_ENV="$4"
-    USE_LINK="$5"
-    USE_DEPS="$6"
-    USE_PATHS="$7"
-    USE_FILES="$8"
-    USE_ALIASES="$9"
-    USE_SCRIPT="$10"
+    
+    shift 3
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
 
     # Normalize for easier pattern matching etc
     NEW_ROLE_UPPER=$(normalize_role "${NEW_ROLE}")
@@ -333,14 +408,43 @@ function release_role
     NEW_ROLE="$1"
     NEW_ROLE_ACTION="$2"
     ROLE_LIST="$3"
-    USE_ENV="$4"
-    USE_LINK="$5"
-    USE_DEPS="$6"
-    USE_PATHS="$7"
-    USE_FILES="$8"
-    USE_ALIASES="$9"
-    USE_SCRIPT="$10"
     
+    shift 3
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
+
     # Normalize for easier pattern matching etc
     NEW_ROLE_UPPER=$(normalize_role "${NEW_ROLE}")
     
@@ -354,7 +458,7 @@ function release_role
         
         while [[ "${#APPLIED_ROLE[@]}" -gt 0 ]]; do
 
-            release_role "${APPLIED_ROLE[0]}" "${NEW_ROLE_ACTION}" "${ROLE_LIST}" "${USE_ENV}" "${USE_LINK}" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT" || return $?
+            release_role "${APPLIED_ROLE[0]}" "${NEW_ROLE_ACTION}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
 
             APPLIED_ROLE=($(get_env | grep "^DOTFILES_ADD_ROLE__" | cut -d"_" -f5- | unnormalize_role | sed 's/=/ /g' | sort -k2,2 -nr))
 
@@ -379,19 +483,19 @@ function release_role
     
         case "${STAGE}" in
         
-            aliases      ) teardown_role_aliases      "$USE_ALIASES" "${NEW_ROLE}" "${ROLE_LIST}"                                                                               || return $?
+            aliases      ) teardown_role_aliases      "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
-            files        ) teardown_role_files        "$USE_FILES"   "${NEW_ROLE}" "${ROLE_LIST}"                                                                               || return $?
+            files        ) teardown_role_files        "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
-            links        ) teardown_role_links        "$USE_LINK"    "${NEW_ROLE}" "${ROLE_LIST}"                                                                               || return $?
+            links        ) teardown_role_links        "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
-            dependencies ) teardown_role_dependencies "$USE_DEPS"    "${NEW_ROLE}" "${ROLE_LIST}" "$USE_ENV" "$USE_LINK" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT" || return $?
+            dependencies ) teardown_role_dependencies "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
-            env          ) teardown_role_environment  "$USE_ENV"     "${NEW_ROLE}" "${ROLE_LIST}"                                                                               || return $?
+            env          ) teardown_role_environment  "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
-            path         ) teardown_role_paths        "$USE_PATHS"   "${NEW_ROLE}" "${ROLE_LIST}"                                                                               || return $?
+            path         ) teardown_role_paths        "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
-            script       ) teardown_role_script       "$USE_SCRIPT"  "${NEW_ROLE}" "${ROLE_LIST}"                                                                               || return $?
+            script       ) teardown_role_script       "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
             
         esac
@@ -404,13 +508,42 @@ function request_role
     NEW_ROLE="$1"
     NEW_ROLE_ACTION="$2"
     ROLE_LIST="$3"
-    USE_ENV="$4"
-    USE_LINK="$5"
-    USE_DEPS="$6"
-    USE_PATHS="$7"
-    USE_FILES="$8"
-    USE_ALIASES="$9"
-    USE_SCRIPT="$10"
+    
+    shift 3
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
     
     # Normalize for easier pattern matching etc
     NEW_ROLE_UPPER=$(normalize_role "${NEW_ROLE}")
@@ -431,19 +564,19 @@ function request_role
 
         case "${STAGE}" in
         
-            aliases      ) setup_role_aliases      "$USE_ALIASES" "${NEW_ROLE}" "${ROLE_LIST}"                                                                               || return $?
+            aliases      ) setup_role_aliases      "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
-            files        ) setup_role_files        "$USE_FILES"   "${NEW_ROLE}" "${ROLE_LIST}"                                                                               || return $?
+            files        ) setup_role_files        "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
-            links        ) setup_role_links        "$USE_LINK"    "${NEW_ROLE}" "${ROLE_LIST}"                                                                               || return $?
+            links        ) setup_role_links        "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
-            dependencies ) setup_role_dependencies "$USE_DEPS"    "${NEW_ROLE}" "${ROLE_LIST}" "$USE_ENV" "$USE_LINK" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT" || return $?
+            dependencies ) setup_role_dependencies "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
-            env          ) setup_role_environment  "$USE_ENV"     "${NEW_ROLE}" "${ROLE_LIST}"                                                                               || return $?
+            env          ) setup_role_environment  "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
-            path         ) setup_role_paths        "$USE_PATHS"   "${NEW_ROLE}" "${ROLE_LIST}"                                                                               || return $?
+            path         ) setup_role_paths        "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
-            script       ) setup_role_script       "$USE_ENV"     "${NEW_ROLE}" "${ROLE_LIST}"                                                                               || return $?
+            script       ) setup_role_script       "${NEW_ROLE}" "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
             
         esac
@@ -456,9 +589,44 @@ function request_role
 
 function setup_role_aliases
 {
-    USE_ALIASES="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
     
     # Quick exit if no aliases used
     [[ "$USE_ALIASES" == "false" ]] && return 0
@@ -471,9 +639,9 @@ function setup_role_aliases
     if [[ -f "$ROLE_ALIASES" ]]; then
     
         # Cant use pipes as the while loop becomes a subshell in bash, variables etc are not exposed
-        #cat "$ROLE_ALIASES" | grep -v "^#" | grep -v "^$" | while read -r name value; do
+        #read_config "$ROLE_ALIASES" | while read -r name value; do
         
-        ALIASES=$(grep -v "^#" "$ROLE_ALIASES" | grep -v "^$" | cut -d" " -f1)
+        ALIASES=$(read_config "$ROLE_ALIASES" | cut -d" " -f1)
         
         # Go through all alias names, grab their value and create the alias
         for ALIAS_DEF in ${ALIASES}; do
@@ -495,15 +663,44 @@ function setup_role_aliases
 
 function setup_role_dependencies
 {
-    USE_DEPS="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
-    USE_ENV="$4"
-    USE_LINK="$5"
-    USE_PATHS="$6"
-    USE_FILES="$7"
-    USE_ALIASES="$8"
-    USE_SCRIPT="$9"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
     
     # Quick exit if no known dependencies
     [[ "$USE_DEPS" == "false" ]] && return 0
@@ -519,26 +716,19 @@ function setup_role_dependencies
         for DEP_ROLE in ${DEPS_LIST}; do
             ROLE_NAME=$(printf "%s\n" "${DEP_ROLE}" | cut -d, -f2)
 
-            NOENV=""
-            NOLINK=""
-            NOPATH=""
-            NOFILE=""
-            NOALIASES=""
-            NOSCRIPT=""
-            USEDEBUG=""
-            USETRACE=""
-            [[ "$USE_ENV" == "false" ]] && NOENV="--no-env"
-            [[ "$USE_LINK" == "false" ]] && NOLINK="--no-link"
-            [[ "$USE_PATHS" == "false" ]] && NOPATH="--no-paths"
-            [[ "$USE_FILES" == "false" ]] && NOFILE="--no-files"
-            [[ "$USE_ALIASES" == "false" ]] && NOALIASES="--no-aliases"
-            [[ "$USE_SCRIPT" == "false" ]] && NOSCRIPT="--no-script"
-            [[ "$DEBUG" == "true" ]] && USEDEBUG="--debug"
-            [[ "$TRACE" == "true" ]] && USETRACE="--trace"
+            REVERSE_FUNC_SWITCHES=""
+            [[ "$USE_ENV"     == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-env"
+            [[ "$USE_LINK"    == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-link"
+            [[ "$USE_PATHS"   == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-paths"
+            [[ "$USE_FILES"   == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-files"
+            [[ "$USE_ALIASES" == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-aliases"
+            [[ "$USE_SCRIPT"  == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-script"
+            [[ "$DEBUG"       == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --debug"
+            [[ "$TRACE"       == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --trace"
             
             # NOTE: We do not add an option for use dependencies, it is assumed otherwise we would not have got this far in the function
                           
-            . $DOTFILES_HOME/bin/dotfile ${NOENV} ${NOLINK} ${NOPATH} ${NOFILE} ${NOALIASES} ${NOSCRIPT} ${USEDEBUG} ${USETRACE} request "${ROLE_NAME}"
+            . $DOTFILES_HOME/bin/dotfile ${REVERSE_FUNC_SWITCHES} request "${ROLE_NAME}"
             if [[ $? -ne 0 ]]; then
                 printf "%s: Could not add dependency [%s] from role [%s]\n" ERROR "$ROLE_NAME" "$ROLE_PATH" >&2
                 return 3
@@ -546,10 +736,10 @@ function setup_role_dependencies
             
             # Reset input parameters, there is a chance that any script we source can change these values
             # so we reset just to make sure
-            NEW_ROLE="$2"
-            ROLE_LIST="$3"
-            USE_ENV="$4"
-            USE_LINK="$5"
+            NEW_ROLE="$1"
+            ROLE_LIST="$2"
+            #USE_ENV="$4"
+            #USE_LINK="$5"
             NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
             
             ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
@@ -567,9 +757,44 @@ function setup_role_dependencies
 
 function setup_role_environment
 {
-    USE_ENV="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
     
     [[ "$USE_ENV" == "false" ]] && return 0
 
@@ -581,7 +806,7 @@ function setup_role_environment
     if [[ -f "$ROLE_ENV" ]]; then
 
         # Need to remove the need for a while loop as this spawns a subshell in POSIX / bash so the exports arent exposed
-        #cat "$ROLE_ENV" | grep -v "^#" | grep -v "^$" | while read -r action name value; do
+        #read_config "$ROLE_ENV" | while read -r action name value; do
         
         PARAMS=$(grep -E "^(set|prepend|append) " "$ROLE_ENV" | cut -d" " -f2)
         
@@ -625,9 +850,44 @@ function setup_role_environment
 
 function setup_role_script
 {
-    USE_SCRIPT="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
     
     [[ "$USE_SCRIPT" == "false" ]] && return 0
 
@@ -657,9 +917,44 @@ function setup_role_script
 
 function setup_role_paths
 {
-    USE_PATHS="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
 
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
     ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
@@ -680,9 +975,44 @@ function setup_role_paths
 
 function setup_role_files
 {
-    USE_FILE="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
     
     ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_FILE="$ROLE_PATH/files"
@@ -875,9 +1205,44 @@ function setup_role_files
 
 function setup_role_links
 {
-    USE_LINK="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
     
     # Quick exit
     [[ "$USE_LINK" == "false" ]] && return 0
@@ -968,9 +1333,44 @@ function setup_role_links
 
 function teardown_role_aliases
 {
-    USE_ALIASES="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
     
     [[ "$USE_ALIASES" == "false" ]] && return 0
 
@@ -981,9 +1381,9 @@ function teardown_role_aliases
     if [[ -f "$ROLE_ALIASES" ]]; then
     
         # Cant use pipes as the while loop becomes a subshell in bash, variables etc are not exposed
-        #cat "$ROLE_ALIASES" | grep -v "^#" | grep -v "^$" | while read -r name value; do
+        #read_config "$ROLE_ALIASES" | while read -r name value; do
         
-        ALIASES=$(grep -v "^#" "$ROLE_ALIASES" | grep -v "^$" | reverse_lines | cut -d" " -f1)
+        ALIASES=$(read_config "$ROLE_ALIASES" | reverse_lines | cut -d" " -f1)
         
         for ALIAS_DEF in ${ALIASES}; do
         
@@ -997,15 +1397,44 @@ function teardown_role_aliases
 
 function teardown_role_dependencies
 {
-    USE_DEPS="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
-    USE_ENV="$4"
-    USE_LINK="$5"
-    USE_PATHS="$6"
-    USE_FILES="$7"
-    USE_ALIASES="$8"
-    USE_SCRIPT="$9"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
     
     [[ "$USE_DEPS" == "false" ]] && return 0
 
@@ -1021,24 +1450,18 @@ function teardown_role_dependencies
             ROLE_NAME=$(printf "%s\n" "${DEP_ROLE}" | cut -d, -f2)
             
             # Propogate command line options as we are calling the script again
-            NOENV=""
-            NOLINK=""
-            NOPATH=""
-            NOFILE=""
-            NOALIASES=""
-            NOSCRIPT=""
-            USEDEBUG=""
-            USETRACE=""
-            [[ "$USE_ENV" == "false" ]] && NOENV="--no-env"
-            [[ "$USE_LINK" == "false" ]] && NOLINK="--no-link"
-            [[ "$USE_PATHS" == "false" ]] && NOPATH="--no-paths"
-            [[ "$USE_FILES" == "false" ]] && NOFILE="--no-files"
-            [[ "$USE_ALIASES" == "false" ]] && NOALIASES="--no-aliases"
-            [[ "$USE_SCRIPT" == "false" ]] && NOSCRIPT="--no-script"
-            [[ "$DEBUG" == "true" ]] && USEDEBUG="--debug"
-            [[ "$TRACE" == "true" ]] && USETRACE="--trace"
+            REVERSE_FUNC_SWITCHES=""
+            [[ "$USE_ENV"     == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-env"
+            [[ "$USE_LINK"    == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-link"
+            [[ "$USE_PATHS"   == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-paths"
+            [[ "$USE_FILES"   == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-files"
+            [[ "$USE_ALIASES" == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-aliases"
+            [[ "$USE_SCRIPT"  == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-script"
+            [[ "$DEBUG"       == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --debug"
+            [[ "$TRACE"       == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --trace"
             
-            . $DOTFILES_HOME/bin/dotfile ${NOENV} ${NOLINK} ${NOPATH} ${NOFILE} ${NOALIASES} ${NOSCRIPT} ${USEDEBUG} ${USETRACE} release "${ROLE_NAME}"
+            
+            . $DOTFILES_HOME/bin/dotfile ${REVERSE_FUNC_SWITCHES} release "${ROLE_NAME}"
             if [[ $? -ne 0 ]]; then
                 printf "%s: Could not remove dependency [%s] from role [%s]\n" ERROR "${ROLE_NAME}" "${NEW_ROLE}" >&2
                 return 4
@@ -1046,10 +1469,10 @@ function teardown_role_dependencies
             
             # Reset input parameters, there is a chance that any script we source can change these values
             # so we reset just to make sure
-            NEW_ROLE="$2"
-            ROLE_LIST="$3"
-            USE_ENV="$4"
-            USE_LINK="$5"
+            NEW_ROLE="$1"
+            ROLE_LIST="$2"
+            #USE_ENV="$4"
+            #USE_LINK="$5"
             NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
             
             ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
@@ -1067,9 +1490,44 @@ function teardown_role_dependencies
 
 function teardown_role_environment
 {
-    USE_ENV="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
 
     # Quick exit
     [[ "$USE_ENV" == "false" ]] && return 0
@@ -1081,7 +1539,7 @@ function teardown_role_environment
     if [[ -f "$ROLE_ENV" ]]; then
 
         # Need to remove the need for a while loop as this spawns a subshell in POSIX / bash so the exports arent exposed
-        #cat "$ROLE_ENV" | grep -v "^#" | grep -v "^$" | while read -r action name value; do
+        #read_config "$ROLE_ENV" | while read -r action name value; do
         
         PARAMS=$(grep -E "^(set|prepend|append) " "$ROLE_ENV" | reverse_lines | cut -d" " -f2)
         
@@ -1141,9 +1599,44 @@ function teardown_role_environment
 
 function teardown_role_script
 {
-    USE_SCRIPT="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
 
     [[ "$USE_SCRIPT" == "false" ]] && return 0
 
@@ -1171,9 +1664,44 @@ function teardown_role_script
 
 function teardown_role_paths
 {
-    USE_PATHS="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
 
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
     ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
@@ -1195,9 +1723,44 @@ function teardown_role_paths
 function teardown_role_files
 {
     return 0
-    USE_FILE="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
     
     [[ "$USE_FILE" == "false" ]] && return 0
 
@@ -1389,9 +1952,44 @@ function teardown_role_files
 
 function teardown_role_links
 {
-    USE_LINK="$1"
-    NEW_ROLE="$2"
-    ROLE_LIST="$3"
+    NEW_ROLE="$1"
+    ROLE_LIST="$2"
+
+    shift 2
+    
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+            *        ) break
+                       ;;
+                       
+        esac
+        
+    done
     
     [[ "$USE_LINK" == "false" ]] && return 0
 
@@ -1591,6 +2189,15 @@ while [[ $# -ne 0 ]]; do
 done
 
 
+FUNC_SWITCHES=""
+[[ "$USE_ALIASES" == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+[[ "$USE_FILES"   == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+[[ "$USE_LINK"    == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+[[ "$USE_ENV"     == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+[[ "$USE_DEPS"    == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+[[ "$USE_PATHS"   == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+[[ "$USE_SCRIPT"  == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+
 # Check we have the right amount of parameters left
 if [[ $# -lt 2 ]]; then
     if [[ $# -lt 1 || ( "$1" != "list" && "$1" != "reset" ) ]]; then
@@ -1638,7 +2245,7 @@ NEW_ROLE_ACTION=$( printf "%s\n" "$2" | cut -d":" -f2)
 
 case "$MAIN_CMD" in
 
-    describe           ) describe_role "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
+    describe           ) describe_role "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" ${FUNC_SWITCHES}
                          return $?
                          ;;
     help               ) help_role "$NEW_ROLE"
@@ -1654,11 +2261,11 @@ export DOTFILES_ALLOCATION_INDEX="${DOTFILES_ALLOCATION_INDEX:-0}"
 # Basic validation
 case "$MAIN_CMD" in
 
-    request            ) request_role  "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
+    request            ) request_role  "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" ${FUNC_SWITCHES}
                          ;;
-    release            ) release_role  "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
+    release            ) release_role  "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" ${FUNC_SWITCHES}
                          ;;
-    reset              ) release_role  "@"         "$NEW_ROLE_ACTION" "$ROLE_LIST" "$USE_ENV" "$USE_LINK" "$USE_DEPS" "$USE_PATHS" "$USE_FILES" "$USE_ALIASES" "$USE_SCRIPT"
+    reset              ) release_role  "@"         "$NEW_ROLE_ACTION" "$ROLE_LIST" ${FUNC_SWITCHES}
                          ;;
     
 esac
