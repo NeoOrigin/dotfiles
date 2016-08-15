@@ -818,14 +818,14 @@ function setup_role_files
                 ${DEBUG} && log_it DEBUG CLEANUP "grep -v '^${SHORT_NAME_SAFE} ' '${BASE_PATH}/.dotfile.managed' > '${BASE_PATH}/.dotfile.managed2'"
                 grep -v "^${SHORT_NAME_SAFE} " "${BASE_PATH}/.dotfile.managed" > "${BASE_PATH}/.dotfile.managed2"
                 if [[ $? -ne 0 ]]; then
-                    echo "ERROR: Could not add remove file from role [${ROLE_PATH}]" >&2
+                    printf "%s: Could not remove file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
                     return 4
                 fi
                 
                 ${DEBUG} && log_it DEBUG CLEANUP "mv '${BASE_PATH}/.dotfile.managed2' '${BASE_PATH}/.dotfile.managed'"
                 mv "${BASE_PATH}/.dotfile.managed2" "${BASE_PATH}/.dotfile.managed"
                 if [[ $? -ne 0 ]]; then
-                    echo "ERROR: Could not add file from role [${ROLE_PATH}]" >&2
+                    printf "%s: Could not add file to role [%s]\n" ERROR "${ROLE_PATH}" >&2
                     return 4
                 fi
                 
@@ -849,7 +849,7 @@ function setup_role_files
                 ${DEBUG} && log_it DEBUG COPYING "echo '${SHORT_NAME} ${ACTUAL_VALUE} ${name}' >> '${BASE_PATH}/.dotfile.managed'"
                 printf "%s %s %s\n" "${SHORT_NAME}" "${ACTUAL_VALUE}" "${name}" >> "${BASE_PATH}/.dotfile.managed"
                 if [[ $? -ne 0 ]]; then
-                    echo "ERROR: Could not add metadata to [${BASE_PATH}/${SHORT_NAME}] to manage file copy from role [${ROLE_PATH}]" >&2
+                    printf "%s: Could not add metadata to [%s] to manage file copy from role [%s]\n" ERROR "${BASE_PATH}/${SHORT_NAME}" "${ROLE_PATH}" >&2
                     return 5
                 fi
                 
@@ -928,7 +928,7 @@ function setup_role_links
                     ${DEBUG} && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
                     rm -f "${BASE_PATH}/${SHORT_NAME}"
                     if [[ $? -ne 0 ]]; then
-                        echo "ERROR: Could not add reset symbolic links from role [${ROLE_PATH}]" >&2
+                        printf "%s: Could not add reset symbolic links from role [%s]\n" ERROR "${ROLE_PATH}" >&2
                         return 4
                     fi
                     
@@ -944,7 +944,7 @@ function setup_role_links
                 ${DEBUG} && log_it DEBUG LINKING "ln -s '${name}' '${BASE_PATH}/${SHORT_NAME}'"
                 ln -s "${name}" "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    echo "ERROR: Could not add symbolic links from role [${ROLE_PATH}]" >&2
+                    printf "%s: Could not add symbolic links from role [%s]\n" ERROR "${ROLE_PATH}" >&2
                     return 5
                 fi
                 
@@ -1037,7 +1037,7 @@ function teardown_role_dependencies
             
             . $DOTFILES_HOME/bin/dotfile ${NOENV} ${NOLINK} ${NOPATH} ${NOFILE} ${NOALIASES} ${NOSCRIPT} ${USEDEBUG} ${USETRACE} release "${ROLE_NAME}"
             if [[ $? -ne 0 ]]; then
-                echo "ERROR: Could not remove dependency [${ROLE_NAME}] from role [${NEW_ROLE}]" >&2
+                printf "%s: Could not remove dependency [%s] from role [%s]\n" ERROR "${ROLE_NAME}" "${NEW_ROLE}" >&2
                 return 4
             fi
             
@@ -1068,7 +1068,8 @@ function teardown_role_environment
     NEW_ROLE="$2"
     ROLE_LIST="$3"
     
-    [[ "$USE_ENV == "false" ]] && return 0
+    # Quick exit
+    [[ "$USE_ENV" == "false" ]] && return 0
 
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
     ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
@@ -1096,7 +1097,7 @@ function teardown_role_environment
                 
                           unset "${name}"
                           if [[ $? -ne 0 ]]; then
-                              echo "ERROR: Could not unset environment variable [${name}] from role [${ROLE_PATH}]" >&2
+                              printf "%s: Could not unset environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
                               return 3
                           fi
                           ;;
@@ -1116,7 +1117,7 @@ function teardown_role_environment
                           
                           export "${name}"="$new_value"
                           if [[ $? -ne 0 ]]; then
-                              echo "ERROR: Could not shift environment variable [${name}] from role [${ROLE_PATH}]" >&2
+                              printf "%s: Could not shift environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
                               return 3
                           fi
                           ;;
@@ -1124,7 +1125,7 @@ function teardown_role_environment
             esac
             
             # Check if user wants all unset variables to be unset or remain as blank
-            if [[ "$DOTFILES_UNSET_EMPTY_VARIABLES" == "true" && -z "$new_value" ]]; then
+            if [[ "$DOTFILES_UNSET_EMPTY_VARIABLES" == "true" && -z "${new_value}" ]]; then
                 unset "${name}"
             fi
             
@@ -1156,7 +1157,7 @@ function teardown_role_script
         . "${ROLE_MAIN}" --teardown
 
         if [[ $? -ne 0 ]]; then
-            echo "ERROR: Could not release role [${ROLE_PATH}]" >&2
+            printf "%s: Could not release role [%s]\n" ERROR "${ROLE_PATH}" >&2
             return 3
         fi
 
@@ -1328,14 +1329,14 @@ function teardown_role_files
                 ${DEBUG} && log_it DEBUG CLEANUP "grep -v '^${SHORT_NAME} ' '${BASE_PATH}/.dotfile.managed' > '${BASE_PATH}/.dotfile.managed2'"
                 grep -v "^${SHORT_NAME} " "${BASE_PATH}/.dotfile.managed" > "${BASE_PATH}/.dotfile.managed2"
                 if [[ $? -ne 0 ]]; then
-                    echo "ERROR: Could not add remove file from role [${ROLE_PATH}]" >&2
+                    printf "%s: Could not add remove file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
                     return 4
                 fi
                 
                 ${DEBUG} && log_it DEBUG CLEANUP "mv '${BASE_PATH}/.dotfile.managed2' '${BASE_PATH}/.dotfile.managed'"
                 mv "${BASE_PATH}/.dotfile.managed2" "${BASE_PATH}/.dotfile.managed"
                 if [[ $? -ne 0 ]]; then
-                    echo "ERROR: Could not add file from role [${ROLE_PATH}]" >&2
+                   printf "%s: Could not add file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
                     return 4
                 fi
                 
@@ -1370,7 +1371,7 @@ function teardown_role_files
                 ${DEBUG} && log_it DEBUG COPYING "cp --recursive --archive '${name}' '${BASE_PATH}/${SHORT_NAME}'"
                 cp --recursive --archive "${name}" "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    echo "ERROR: Could not add file from role [${ROLE_PATH}]" >&2
+                    printf "%s: Could not add file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
                     return 5
                 fi
                 
