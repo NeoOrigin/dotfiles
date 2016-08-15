@@ -16,15 +16,20 @@
 ERR_UNKNOWN_CMD=1
 ERR_INVALID_LOG_PATH=2
 ERR_ROLE_NOT_FOUND=3
+ERR_FAILED_LOADING_CONFIG=4
 
 ERR_AUTHENTICATION_FAILED=10
 ERR_AUTHORIZATION_FAILED=20
 
 ERR_CREATE_ALIAS_FAILED=50
-ERR_CREATE_DEPENDECY_FAILED=51
+ERR_CREATE_DEPENDENCY_FAILED=51
+ERR_CREATE_SCRIPT_FAILED=52
+ERR_CREATE_ENV_FAILED=53
+ERR_CREATE_LINK_FAILED=54
 
 ERR_DELETE_ALIAS_FAILED=80
 ERR_DELETE_DEPENDENCY_FAILED=81
+ERR_DELETE_ENV_FAILED=83
 
 SUCCESS=0
 
@@ -125,10 +130,17 @@ function print_error
     # 
     ####################################################################################
     
+    EXITCODE=""
+    if [[ "${1}" == "--exit" ]]; then
+        EXITCODE="${2}"
+        shift 2
+    fi
+    
     MSG="$1"
     shift
     
     printf "%s: ${MSG}\n" ERROR "$@" >&2
+    [[ -n "${EXITCODE}" ]] && exit $EXITCODE
 }
 
 function get_env
@@ -609,12 +621,19 @@ function request_role
 
     done
     
+    # Increment global variables to indicate the success of this request
     export DOTFILES_ALLOCATION_INDEX=$(( DOTFILES_ALLOCATION_INDEX + 1 ))
     eval export DOTFILES_ADD_ROLE__${NEW_ROLE_UPPER}"="${DOTFILES_ALLOCATION_INDEX}
 }
 
 function setup_role_aliases
 {
+    ####################################################################################
+    #
+    # Description:  Roles can contain aliases.  Provisio nthem if found
+    # 
+    ####################################################################################
+    
     NEW_ROLE=""
     ROLE_LIST=""
     USE_ENV=false
@@ -666,33 +685,40 @@ function setup_role_aliases
     ROLE_ALIASES="$ROLE_PATH/aliases"
     
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
-    if [[ -f "$ROLE_ALIASES" ]]; then
+    [[ ! -f "$ROLE_ALIASES" ]] && return $SUCCESS
     
-        # Cant use pipes as the while loop becomes a subshell in bash, variables etc are not exposed
-        #read_config "$ROLE_ALIASES" | while read -r name value; do
+    
+    # Cant use pipes as the while loop becomes a subshell in bash, variables etc are not exposed
+    #read_config "$ROLE_ALIASES" | while read -r name value; do
         
-        ALIASES=$(read_config "$ROLE_ALIASES" | cut -d" " -f1)
+    ALIASES=$(read_config "$ROLE_ALIASES" | cut -d" " -f1)
         
-        # Go through all alias names, grab their value and create the alias
-        for ALIAS_DEF in ${ALIASES}; do
+    # Go through all alias names, grab their value and create the alias
+    for ALIAS_DEF in ${ALIASES}; do
             
-            # Escape, suitable for grep
-            name=$(printf "%s\n" "$ALIAS_DEF" | sed 's|\.|\\.|g')
-            value=$(grep "^$name " "$ROLE_ALIASES" | tail -1 | cut -d" " -f2-)
+        # Escape, suitable for grep
+        name=$(printf "%s\n" "$ALIAS_DEF" | sed 's|\.|\\.|g')
+        value=$(grep "^$name " "$ROLE_ALIASES" | tail -1 | cut -d" " -f2-)
 
-            eval alias -- "${ALIAS_DEF}"="${value}"
-            if [[ $? -ne 0 ]]; then
-                print_error "Could not create alias [%s] from role [%s]" "${ALIAS_DEF}" "${ROLE_PATH}"
-                return $ERR_CREATE_ALIAS_FAILED
-            fi
+        eval alias -- "${ALIAS_DEF}"="${value}"
+        if [[ $? -ne 0 ]]; then
+            print_error "Could not create alias [%s] from role [%s]" "${ALIAS_DEF}" "${ROLE_PATH}"
+            return $ERR_CREATE_ALIAS_FAILED
+        fi
 
-        done
+    done
         
-    fi
+    return $SUCCESS
 }
 
 function setup_role_dependencies
 {
+    ####################################################################################
+    #
+    # Description:  A role can be dependent on the creation of another role.  Run it
+    # 
+    ####################################################################################
+    
     NEW_ROLE=""
     ROLE_LIST=""
     USE_ENV=false
@@ -743,88 +769,90 @@ function setup_role_dependencies
     ROLE_DEPS="$ROLE_PATH/dependencies"
 
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
-    if [[ -f "$ROLE_DEPS" ]]; then
-    
-        DEPS_LIST=$(grep "^role " "$ROLE_DEPS" | sed 's/ /,/g')
-        
-        for DEP_ROLE in ${DEPS_LIST}; do
-            ROLE_NAME=$(printf "%s\n" "${DEP_ROLE}" | cut -d, -f2)
+    [[ ! -f "$ROLE_DEPS" ]] && return $SUCCESS
 
-            REVERSE_FUNC_SWITCHES=""
-            [[ "$USE_ENV"     == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-env"
-            [[ "$USE_LINK"    == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-link"
-            [[ "$USE_PATHS"   == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-paths"
-            [[ "$USE_FILES"   == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-files"
-            [[ "$USE_ALIASES" == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-aliases"
-            [[ "$USE_SCRIPT"  == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-script"
-            [[ "$DEBUG"       == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --debug"
-            [[ "$TRACE"       == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --trace"
-            
-            # NOTE: We do not add an option for use dependencies, it is assumed otherwise we would not have got this far in the function
-            . $DOTFILES_HOME/bin/dotfile ${REVERSE_FUNC_SWITCHES} request "${ROLE_NAME}"
-            if [[ $? -ne 0 ]]; then
-                print_error "Could not add dependency [%s] from role [%s]" "$ROLE_NAME" "$ROLE_PATH"
-                return $ERR_CREATE_DEPENDECY_FAILED
-            fi
-            
-            # Reset input parameters, there is a chance that any script we source can change these values
-            # so we reset just to make sure
-            NEW_ROLE=""
-            ROLE_LIST=""
-            USE_ENV=false
-            USE_LINK=false
-            USE_DEPS=false
-            USE_PATHS=false
-            USE_FILES=false
-            USE_ALIASES=false
-            USE_SCRIPT=false
-            FUNC_SWITCHES=""
     
-            i=0
-            my_arr=("$@")
-            for var in "$@"; do
+    # Find our dependencies, should be of the format role <dependency>
+    DEPS_LIST=$(grep "^role " "$ROLE_DEPS" | sed 's/ /,/g')
     
-                i=$(( i + 1 ))
+    for DEP_ROLE in ${DEPS_LIST}; do
+        ROLE_NAME=$(printf "%s\n" "${DEP_ROLE}" | cut -d, -f2)
+
+        # We could do this outside of hte loop but because we source other scripts they might do this also
+        # safer to do this on every loop to ensure our variables look ok
+        REVERSE_FUNC_SWITCHES=""
+        [[ "$USE_ENV"     == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-env"
+        [[ "$USE_LINK"    == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-link"
+        [[ "$USE_PATHS"   == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-paths"
+        [[ "$USE_FILES"   == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-files"
+        [[ "$USE_ALIASES" == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-aliases"
+        [[ "$USE_SCRIPT"  == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-script"
+        [[ "$DEBUG"       == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --debug"
+        [[ "$TRACE"       == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --trace"
+            
+        # NOTE: We do not add an option for use dependencies, it is assumed otherwise we would not have got this far in the function
+        . $DOTFILES_HOME/bin/dotfile ${REVERSE_FUNC_SWITCHES} request "${ROLE_NAME}"
+        if [[ $? -ne 0 ]]; then
+            print_error "Could not add dependency [%s] from role [%s]" "$ROLE_NAME" "$ROLE_PATH"
+            return $ERR_CREATE_DEPENDENCY_FAILED
+        fi
+            
+        # Reset input parameters, there is a chance that any script we source can change these values
+        # so we reset just to make sure
+        NEW_ROLE=""
+        ROLE_LIST=""
+        USE_ENV=false
+        USE_LINK=false
+        USE_DEPS=false
+        USE_PATHS=false
+        USE_FILES=false
+        USE_ALIASES=false
+        USE_SCRIPT=false
+        FUNC_SWITCHES=""
+    
+        i=0
+        my_arr=("$@")
+        for var in "$@"; do
+    
+            i=$(( i + 1 ))
         
-                case "$var" in
+            case "$var" in
         
-                    --role   ) NEW_ROLE="${my_arr[$i]}"
-                               ;;
-                    --list   ) ROLE_LIST="${my_arr[$i]}"
-                               ;;
+                --role   ) NEW_ROLE="${my_arr[$i]}"
+                           ;;
+                --list   ) ROLE_LIST="${my_arr[$i]}"
+                           ;;
         
-                    --alias  ) USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
-                               ;;
-                    --files  ) USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
-                               ;;
-                    --link   ) USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
-                               ;;
-                    --env    ) USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
-                               ;;
-                    --deps   ) USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
-                               ;;
-                    --path   ) USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
-                               ;;
-                    --script ) USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
-                               ;;
+                --alias  ) USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                           ;;
+                --files  ) USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                           ;;
+                --link   ) USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                           ;;
+                --env    ) USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                           ;;
+                --deps   ) USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                           ;;
+                --path   ) USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                           ;;
+                --script ) USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                           ;;
                        
-                esac
+            esac
         
-            done
-            
-            NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
-            
-            ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
-            ROLE_MAIN="$ROLE_PATH"
-            ROLE_LINK="${ROLE_PATH}/links"
-            ROLE_DEPS="${ROLE_PATH}/dependencies"
-            [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
-            
         done
-
-    fi
+            
+        NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
+            
+        ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+        ROLE_MAIN="$ROLE_PATH"
+        ROLE_LINK="${ROLE_PATH}/links"
+        ROLE_DEPS="${ROLE_PATH}/dependencies"
+        [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
+            
+    done
     
-    return 0
+    return $SUCCESS
 }
 
 function setup_role_environment
@@ -879,49 +907,52 @@ function setup_role_environment
     ROLE_ENV="$ROLE_PATH/env"
     
     # last step is to inherit the environment if configured and there is an executable file
-    if [[ -f "$ROLE_ENV" ]]; then
+    [[ ! -f "$ROLE_ENV" ]] && return $SUCCESS
 
-        # Need to remove the need for a while loop as this spawns a subshell in POSIX / bash so the exports arent exposed
-        #read_config "$ROLE_ENV" | while read -r action name value; do
-        
-        PARAMS=$(grep -E "^(set|prepend|append) " "$ROLE_ENV" | cut -d" " -f2)
-        
-        for PARAM in ${PARAMS}; do
-        
-            PARAM_SAFE=$(escape_regex_extended "$PARAM")
-            line=$(grep -E "^(set|prepend|append) ${PARAM_SAFE} " "$ROLE_ENV")
-            action=$(printf "%s\n" "$line" | cut -d" " -f1)
-            name="$PARAM"
-            value=$(printf "%s\n" "$line" | cut -d" " -f3-)
 
-            case "$action" in
+    # Need to remove the need for a while loop as this spawns a subshell in POSIX / bash so the exports arent exposed
+    #read_config "$ROLE_ENV" | while read -r action name value; do
+    
+    # Format of the env variable file is (set|prepend|append) <name> <value>
+    PARAMS=$(grep -E "^(set|prepend|append) " "$ROLE_ENV" | cut -d" " -f2)
+        
+    for PARAM in ${PARAMS}; do
+        
+        # Escape for egrep
+        PARAM_SAFE=$(escape_regex_extended "$PARAM")
+        
+        # Extract the exact line
+        name="$PARAM"
+        line=$(grep -E "^(set|prepend|append) ${PARAM_SAFE} " "$ROLE_ENV")
+        action=$( printf "%s\n" "$line" | cut -d" " -f1  )
+        value=$(  printf "%s\n" "$line" | cut -d" " -f3- )
+
+        case "$action" in
             
-                set     ) eval export "${name}"="${value}"
-                          if [[ $? -ne 0 ]]; then
-                              print_error "Could not create environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
-                              return 3
-                          fi
-                          ;;
-                prepend ) eval export "${name}"="${value}\$${name}"
-                          if [[ $? -ne 0 ]]; then
-                              print_error "Could not prepend environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
-                              return 3
-                          fi
-                          ;;
-                append  ) eval export "${name}"="\$${name}${value}"
-                          if [[ $? -ne 0 ]]; then
-                              print_error "Could not append environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
-                              return 3
-                          fi
-                          ;;
+            set     ) eval export "${name}"="${value}"
+                      if [[ $? -ne 0 ]]; then
+                          print_error "Could not create environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
+                          return $ERR_CREATE_ENV_FAILED
+                      fi
+                      ;;
+            prepend ) eval export "${name}"="${value}\$${name}"
+                      if [[ $? -ne 0 ]]; then
+                          print_error "Could not prepend environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
+                          return $ERR_CREATE_ENV_FAILED
+                      fi
+                      ;;
+            append  ) eval export "${name}"="\$${name}${value}"
+                      if [[ $? -ne 0 ]]; then
+                          print_error "Could not append environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
+                          return $ERR_CREATE_ENV_FAILED
+                      fi
+                      ;;
             
-            esac
+        esac
 
-        done
+    done
 
-    fi
-
-    return 0
+    return $SUCCESS
 }
 
 function setup_role_script
@@ -980,19 +1011,18 @@ function setup_role_script
 
     
     # last step is to inherit the environment if configured and there is an executable file
-    if [[ -f "$ROLE_MAIN" ]]; then
+    [[ ! -f "$ROLE_MAIN" ]] && return $SUCCESS
 
-        ${DEBUG} && log_it DEBUG CALL ". ${ROLE_MAIN} --setup"
-        . "${ROLE_MAIN}" --setup
 
-        if [[ $? -ne 0 ]]; then
-            print_error "Could not run script from role [%s]" "${ROLE_PATH}"
-            return 3
-        fi
+    ${DEBUG} && log_it DEBUG CALL ". ${ROLE_MAIN} --setup"
+    . "${ROLE_MAIN}" --setup
 
+    if [[ $? -ne 0 ]]; then
+        print_error "Could not run script from role [%s]" "${ROLE_PATH}"
+        return $ERR_CREATE_SCRIPT_FAILED
     fi
 
-    return 0
+    return $SUCCESS
 }
 
 function setup_role_paths
@@ -1046,6 +1076,7 @@ function setup_role_paths
     ROLE_LIB="$ROLE_PATH/lib"
     ROLE_FUN="$ROLE_PATH/funcs"
 
+    # Add directories to their relevent paths if found
     if [[ "$USE_PATHS" == "true" ]]; then
 
         [[ -d "$ROLE_BIN" ]] && export PATH="$ROLE_BIN:$PATH"
@@ -1054,7 +1085,7 @@ function setup_role_paths
 
     fi
     
-    return 0
+    return $SUCCESS
 }
 
 function setup_role_files
@@ -1289,7 +1320,7 @@ function setup_role_files
         
     fi
     
-    return 0
+    return $SUCCESS
 }
 
 function setup_role_links
@@ -1344,88 +1375,100 @@ function setup_role_links
     ROLE_LINK="$ROLE_PATH/links"
     
     # First step is to create links if configured and the role contains them
-    if [[ -d "${ROLE_LINK}" ]]; then
+    [[ ! -d "${ROLE_LINK}" ]] && return $SUCCESS
     
-        # Find direct children
-        TARGETS=$(find "$ROLE_LINK" -maxdepth 1 -mindepth 1 2>/dev/null)
+    
+    # Find direct children
+    TARGETS=$(find "$ROLE_LINK" -maxdepth 1 -mindepth 1 2>/dev/null)
 
-        # Go through all the files/folders found in the links folder as we need to point to them as symbolic
-        # links in the users home directory
-        for name in ${TARGETS}; do
+    # Go through all the files/folders found in the links folder as we need to point to them as symbolic
+    # links in the users home directory
+    for name in ${TARGETS}; do
         
-            # Escape the name of the link as will be used for egrep
-            SHORT_NAME=$(basename "${name}")
-            SHORT_NAME_SAFE=$(escape_regex_extended "${SHORT_NAME}")
+        # Escape the name of the link as will be used for egrep
+        SHORT_NAME=$(basename "${name}")
+        SHORT_NAME_SAFE=$(escape_regex_extended "${SHORT_NAME}")
 
-            # Determines whether we need to create the link (ie we dont rebuild a link if it already exists)
-            REBUILD_LINK=true
+        # Determines whether we need to create the link (ie we dont rebuild a link if it already exists)
+        REBUILD_LINK=true
             
-            # By default all links are created in the home directory unless overriden
-            BASE_PATH=$(echo ~)
+        # By default all links are created in the home directory unless overriden
+        BASE_PATH=$(echo ~)
             
-            LINKS_LIST=""
-            CHMOD_PERMS=""
-            if [[ -f "$ROLE_PATH/meta" ]]; then
+        LINKS_LIST=""
+        CHMOD_PERMS=""
+        if [[ -f "$ROLE_PATH/meta" ]]; then
             
-                # When building links you can chmod it as well, extract both information
-                OVERRIDES=$(grep -E "^(chmod|link) ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta")
+            # When building links you can chmod it as well, extract both information
+            OVERRIDES=$(grep -E "^(chmod|link) ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta")
 
-                CHMOD_PERMS=$(printf "%s\n" "${OVERRIDES}" | grep "^chmod " | head -1 | cut -d" " -f3)
-                LINKS_LIST=$( printf "%s\n" "${OVERRIDES}" | grep "^link "  | head -1 | cut -d" " -f3)
+            CHMOD_PERMS=$(printf "%s\n" "${OVERRIDES}" | grep "^chmod " | head -1 | cut -d" " -f3)
+            LINKS_LIST=$( printf "%s\n" "${OVERRIDES}" | grep "^link "  | head -1 | cut -d" " -f3)
                 
-                [[ -n "${LINKS_LIST}" ]] && BASE_PATH="${LINKS_LIST}"
+            [[ -n "${LINKS_LIST}" ]] && BASE_PATH="${LINKS_LIST}"
+        fi
+            
+        # Check the link already exists, if it does we may need to repoint it
+        if [[ -L "${BASE_PATH}/${SHORT_NAME}" ]]; then
+
+            ORIG_TARGET=$(readlink --canonicalize "${BASE_PATH}/${SHORT_NAME}")
+            NEW_TARGET=$( readlink --canonicalize "${name}")
+                
+            # Perform quick check, no point rebuilding link if its going to be the same
+            # Also prevents danger that an already running process requires the presence of this link
+            # you dont want it dissappearing even for a millisecond just because you logged in
+            if [[ "${ORIG_TARGET}" == "${NEW_TARGET}" ]]; then
+                REBUILD_LINK=false
+            else
+                
+                # Remove the link, ready to rebuild
+                ${DEBUG} && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
+                rm -f "${BASE_PATH}/${SHORT_NAME}"
+                if [[ $? -ne 0 ]]; then
+                    print_error "Could not reset symbolic links from role [%s]" "${ROLE_PATH}"
+                    return $ERR_CREATE_LINK_FAILED
+                fi
+                    
+            fi
+
+        fi
+            
+        # Only create a link if there is nothing there i.e. above we only checked if a symbolic link existed that
+        # needs repointing, however if a file is there then user must have wanted an override of their own
+        # we do not delete user overrides
+        if [[ "${REBUILD_LINK}" == "true" && ! -e "${BASE_PATH}/${SHORT_NAME}" ]]; then
+            
+            # Try creating the symbolic link
+            ${DEBUG} && log_it DEBUG LINKING "ln -s '${name}' '${BASE_PATH}/${SHORT_NAME}'"
+            ln -s "${name}" "${BASE_PATH}/${SHORT_NAME}"
+            if [[ $? -ne 0 ]]; then
+                print_error "Could not add symbolic links from role [%s]" "${ROLE_PATH}"
+                return $ERR_CREATE_LINK_FAILED
             fi
             
-            # Check the link already exists, if it does we may need to repoint it
-            if [[ -L "${BASE_PATH}/${SHORT_NAME}" ]]; then
-
-                ORIG_TARGET=$(readlink --canonicalize "${BASE_PATH}/${SHORT_NAME}")
-                NEW_TARGET=$( readlink --canonicalize "${name}")
+            # If in the metadata the user also described permissions
+            if [[ -n "$CHMOD_PERMS" ]]; then
+            
+                # Get the current permissions and if they are not the same then change them
+                # NOTE we do not support logical u+w etc permissions, only octal
+                CURR_PERMS=$(find "${BASE_PATH}" -mindepth 1 -maxdepth 1 -name "${SHORT_NAME}" -printf "%#m\n")
+                if [[ -n "$CURR_PERMS" && "$CURR_PERMS" != "$CHMOD_PERMS" ]]; then
                 
-                # Perform quick check, nopoint rebuilding link if its going to be the same
-                # Also prevents danger that an already running processes requires the presence if this link
-                # you dont want it dissappearing even for a millisecond just because you logged in
-                if [[ "${ORIG_TARGET}" == "${NEW_TARGET}" ]]; then
-                    REBUILD_LINK=false
-                else
-                
-                    # Remove the link, ready to rebuild
-                    ${DEBUG} && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
-                    rm -f "${BASE_PATH}/${SHORT_NAME}"
+                    chmod "$CHMOD_PERMS" "${BASE_PATH}/${SHORT_NAME}"
                     if [[ $? -ne 0 ]]; then
-                        print_error "Could not reset symbolic links from role [%s]" "${ROLE_PATH}"
-                        return 4
+                        print_error "Could not set permissions [%s] on symbolic links from role [%s]" "$CHMOD_PERMS" "${ROLE_PATH}"
+                        return $ERR_CREATE_LINK_FAILED
                     fi
                     
                 fi
-
-            fi
-            
-            # Only create a link if there is nothing there i.e. above we only checked if a symbolic link existed that
-            # needs repointing, however if a file is there then user must have wanted an override of their own
-            # we do not delete customer overrides
-            if [[ "${REBUILD_LINK}" == "true" && ! -e "${BASE_PATH}/${SHORT_NAME}" ]]; then
-            
-                ${DEBUG} && log_it DEBUG LINKING "ln -s '${name}' '${BASE_PATH}/${SHORT_NAME}'"
-                ln -s "${name}" "${BASE_PATH}/${SHORT_NAME}"
-                if [[ $? -ne 0 ]]; then
-                    print_error "Could not add symbolic links from role [%s]" "${ROLE_PATH}"
-                    return 5
-                fi
-                
-                if [[ -n "$CHMOD_PERMS" ]]; then
-                    CURR_PERMS=$(find "${BASE_PATH}" -mindepth 1 -maxdepth 1 -name "${SHORT_NAME}" -printf "%#m\n")
-                    
-                    [[ "$CURR_PERMS" != "$CHMOD_PERMS" ]] && chmod "$CHMOD_PERMS" "${BASE_PATH}/${SHORT_NAME}"
-                fi
                 
             fi
+                
+        fi
             
-        done
-        
-    fi
+    done
     
-    return 0
+    return $SUCCESS
 }
 
 function teardown_role_aliases
@@ -1479,21 +1522,22 @@ function teardown_role_aliases
     ROLE_ALIASES="$ROLE_PATH/aliases"
     
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
-    if [[ -f "$ROLE_ALIASES" ]]; then
+    [[ ! -f "$ROLE_ALIASES" ]] && return $SUCCESS
     
-        # Cant use pipes as the while loop becomes a subshell in bash, variables etc are not exposed
-        #read_config "$ROLE_ALIASES" | while read -r name value; do
+    
+    # Cant use pipes as the while loop becomes a subshell in bash, variables etc are not exposed
+    #read_config "$ROLE_ALIASES" | while read -r name value; do
         
-        ALIASES=$(read_config "$ROLE_ALIASES" | reverse_lines | cut -d" " -f1)
+    ALIASES=$(read_config "$ROLE_ALIASES" | reverse_lines | cut -d" " -f1)
         
-        for ALIAS_DEF in ${ALIASES}; do
+    for ALIAS_DEF in ${ALIASES}; do
         
-            unalias -- "${ALIAS_DEF}" 2>/dev/null
-            # No point monitoring for error, alias wont be there
+        unalias -- "${ALIAS_DEF}" 2>/dev/null
+        # No point monitoring for error, alias wont be there
             
-        done
-        
-    fi
+    done
+    
+    return $SUCCESS
 }
 
 function teardown_role_dependencies
@@ -1547,89 +1591,88 @@ function teardown_role_dependencies
     ROLE_DEPS="$ROLE_PATH/dependencies"
     
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
-    if [[ -f "$ROLE_DEPS" ]]; then
+    [[ ! -f "$ROLE_DEPS" ]] && return $SUCCESS
     
-        DEPS_LIST=$(grep "^role " "$ROLE_DEPS" | sed 's/ /,/g' | reverse_lines)
-        
-        for DEP_ROLE in ${DEPS_LIST}; do
-            ROLE_NAME=$(printf "%s\n" "${DEP_ROLE}" | cut -d, -f2)
-            
-            # Propogate command line options as we are calling the script again
-            REVERSE_FUNC_SWITCHES=""
-            [[ "$USE_ENV"     == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-env"
-            [[ "$USE_LINK"    == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-link"
-            [[ "$USE_PATHS"   == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-paths"
-            [[ "$USE_FILES"   == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-files"
-            [[ "$USE_ALIASES" == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-aliases"
-            [[ "$USE_SCRIPT"  == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-script"
-            [[ "$DEBUG"       == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --debug"
-            [[ "$TRACE"       == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --trace"
-            
-            
-            . $DOTFILES_HOME/bin/dotfile ${REVERSE_FUNC_SWITCHES} release "${ROLE_NAME}"
-            if [[ $? -ne 0 ]]; then
-                print_error "Could not remove dependency [%s] from role [%s]" "${ROLE_NAME}" "${NEW_ROLE}"
-                return $ERR_DELETE_DEPENDENCY_FAILED
-            fi
-            
-            # Reset input parameters, there is a chance that any script we source can change these values
-            # so we reset just to make sure
-            NEW_ROLE=""
-            ROLE_LIST=""
-            USE_ENV=false
-            USE_LINK=false
-            USE_DEPS=false
-            USE_PATHS=false
-            USE_FILES=false
-            USE_ALIASES=false
-            USE_SCRIPT=false
-            FUNC_SWITCHES=""
     
-            i=0
-            my_arr=("$@")
-            for var in "$@"; do
+    DEPS_LIST=$(grep "^role " "$ROLE_DEPS" | sed 's/ /,/g' | reverse_lines)
+        
+    for DEP_ROLE in ${DEPS_LIST}; do
+        ROLE_NAME=$(printf "%s\n" "${DEP_ROLE}" | cut -d, -f2)
+            
+        # Propogate command line options as we are calling the script again
+        REVERSE_FUNC_SWITCHES=""
+        [[ "$USE_ENV"     == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-env"
+        [[ "$USE_LINK"    == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-link"
+        [[ "$USE_PATHS"   == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-paths"
+        [[ "$USE_FILES"   == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-files"
+        [[ "$USE_ALIASES" == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-aliases"
+        [[ "$USE_SCRIPT"  == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-script"
+        [[ "$DEBUG"       == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --debug"
+        [[ "$TRACE"       == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --trace"
+            
+            
+        . $DOTFILES_HOME/bin/dotfile ${REVERSE_FUNC_SWITCHES} release "${ROLE_NAME}"
+        if [[ $? -ne 0 ]]; then
+            print_error "Could not remove dependency [%s] from role [%s]" "${ROLE_NAME}" "${NEW_ROLE}"
+            return $ERR_DELETE_DEPENDENCY_FAILED
+        fi
+            
+        # Reset input parameters, there is a chance that any script we source can change these values
+        # so we reset just to make sure
+        NEW_ROLE=""
+        ROLE_LIST=""
+        USE_ENV=false
+        USE_LINK=false
+        USE_DEPS=false
+        USE_PATHS=false
+        USE_FILES=false
+        USE_ALIASES=false
+        USE_SCRIPT=false
+        FUNC_SWITCHES=""
     
-                i=$(( i + 1 ))
+        i=0
+        my_arr=("$@")
+        for var in "$@"; do
+    
+            i=$(( i + 1 ))
         
-                case "$var" in
+            case "$var" in
         
-                    --role   ) NEW_ROLE="${my_arr[$i]}"
-                               ;;
-                    --list   ) ROLE_LIST="${my_arr[$i]}"
-                               ;;
+                --role   ) NEW_ROLE="${my_arr[$i]}"
+                           ;;
+                --list   ) ROLE_LIST="${my_arr[$i]}"
+                           ;;
         
-                    --alias  ) USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
-                               ;;
-                    --files  ) USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
-                               ;;
-                    --link   ) USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
-                               ;;
-                    --env    ) USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
-                               ;;
-                    --deps   ) USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
-                               ;;
-                    --path   ) USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
-                               ;;
-                    --script ) USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
-                               ;;
+                --alias  ) USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                           ;;
+                --files  ) USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                           ;;
+                --link   ) USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                           ;;
+                --env    ) USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                           ;;
+                --deps   ) USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                           ;;
+                --path   ) USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                           ;;
+                --script ) USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                           ;;
                        
-                esac
+            esac
         
-            done
-    
-            NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
-            
-            ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
-            ROLE_MAIN="$ROLE_PATH"
-            ROLE_LINK="${ROLE_PATH}/links"
-            ROLE_DEPS="${ROLE_PATH}/dependencies"
-            [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
-            
         done
-        
-    fi
     
-    return 0
+        NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
+            
+        ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+        ROLE_MAIN="$ROLE_PATH"
+        ROLE_LINK="${ROLE_PATH}/links"
+        ROLE_DEPS="${ROLE_PATH}/dependencies"
+        [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
+            
+    done
+    
+    return $SUCCESS
 }
 
 function teardown_role_environment
@@ -1707,7 +1750,7 @@ function teardown_role_environment
                           unset "${name}"
                           if [[ $? -ne 0 ]]; then
                               print_error "Could not unset environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
-                              return 3
+                              return $ERR_DELETE_ENV_FAILED
                           fi
                           ;;
                 prepend ) #eval export ${name}=${value}${name}
@@ -1717,7 +1760,7 @@ function teardown_role_environment
                           export ${name}="$new_value"
                           if [[ $? -ne 0 ]]; then
                               print_error "Could not pop environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
-                              return 3
+                              return $ERR_DELETE_ENV_FAILED
                           fi
                           ;;
                 append  ) #eval export ${name}=${value}${name}
@@ -1727,7 +1770,7 @@ function teardown_role_environment
                           export ${name}="$new_value"
                           if [[ $? -ne 0 ]]; then
                               print_error "Could not shift environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
-                              return 3
+                              return $ERR_DELETE_ENV_FAILED
                           fi
                           ;;
             
@@ -1742,7 +1785,7 @@ function teardown_role_environment
 
     fi
     
-    return 0
+    return $SUCCESS
 }
 
 function teardown_role_script
@@ -1811,7 +1854,7 @@ function teardown_role_script
 
     fi
     
-    return 0
+    return $SUCCESS
 }
 
 function teardown_role_paths
@@ -1873,11 +1916,14 @@ function teardown_role_paths
 
     fi
     
-    return 0
+    return $SUCCESS
 }
 
 function teardown_role_files
 {
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # Need to get this working
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     return 0
     NEW_ROLE=""
     ROLE_LIST=""
@@ -2107,7 +2153,7 @@ function teardown_role_files
         
     fi
     
-    return 0
+    return $SUCCESS
 }
 
 function teardown_role_links
@@ -2196,7 +2242,7 @@ function teardown_role_links
         
     fi
     
-    return 0
+    return $SUCCESS
 }
 
 
@@ -2215,11 +2261,11 @@ then
         if [[ $? -ne 0 ]]
         then
             print_error "Could not source '%s'.  This is defined in the environment variable %s.  Exiting" "$DOTFILES_CONFIG" DOTFILES_CONFIG
-            return 1
+            return $ERR_FAILED_LOADING_CONFIG
         fi
     else
         print_error "Could not source '%s'.  This is defined in the environment variable %s but does not exist.  Exiting" "$DOTFILES_CONFIG" DOTFILES_CONFIG
-        return 1
+        return $ERR_FAILED_LOADING_CONFIG
     fi
 fi
 
@@ -2230,7 +2276,7 @@ then
     if [[ $? -ne 0 ]]
     then
         print_error "Could not source '%s'.  Exiting" "~/.dotfiles.cfg"
-        return 1
+        return $ERR_FAILED_LOADING_CONFIG
     fi
 fi
 
@@ -2240,7 +2286,7 @@ then
     if [[ $? -ne 0 ]]
     then
         print_error "Could not source '%s'.  Exiting" "${DOTFILES_HOME}/etc/dotfiles.cfg"
-        return 1
+        return $ERR_FAILED_LOADING_CONFIG
     fi
 fi
 
@@ -2250,7 +2296,7 @@ then
     if [[ $? -ne 0 ]]
     then
         print_error "Could not source '%s'.  Exiting" "${DOTFILES_ADMIN_CONFIG}"
-        return 1
+        return $ERR_FAILED_LOADING_CONFIG
     fi
 fi
 
