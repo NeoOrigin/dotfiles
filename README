@@ -9,7 +9,7 @@ The dotfiles project is intended to be used as a centralised store of role based
   - Symbolic Links
   - Paths
 
-The project came about in an organisation where there were 40+ developers working across 20+ servers, many of which shared multiple roles and responsbilties including architecture, development, database administration, gui development and so forth.  With the ease of spinning up virtual machines, the increased ingestion of "Big Data" and the demands it places on scalability a framework was required whereby users could share configuration
+The project came about in an organisation where there were 40+ developers working across 20+ servers, many of which shared multiple roles and responsibilities including architecture, development, database administration, gui development and so forth.  With the ease of spinning up virtual machines, the increased ingestion of "Big Data" and the demands it places on scalability a framework was required whereby users could share configuration
 data in a version controlled manner.  With so many developers (multipled by the myriad of test and production environments) user configurations were almost always non standard and required significant effort at the time 
 to setup and debug.
 

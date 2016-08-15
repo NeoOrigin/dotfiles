@@ -104,7 +104,7 @@ function log_it
     CATEGORY="$2"
     shift 2
 
-    [[ -n "DOTFILES_LOG" ]] && printf "%s: %s: %s: %s: %s\n" "$(date +%Y%m%d%H%M%S)" "${USER}" $$ "${CATEGORY}" "$@" >> "$DOTFILES_LOG"
+    [[ -n "$DOTFILES_LOG" ]] && printf "%s: %s: %s: %s: %s\n" "$(date +%Y%m%d%H%M%S)" "${USER}" $$ "${CATEGORY}" "$@" >> "$DOTFILES_LOG"
 }
 
 function get_env
@@ -321,7 +321,7 @@ function describe_role
         cat "${ROLE_PATH}/dependencies"
 
         if [[ $? -ne 0 ]]; then
-            echo "ERROR: Could not output role [${ROLE_PATH}]" >&2
+            printf "%s: Could not output role [%s]\n" ERROR "${ROLE_PATH}" >&2
             return 4
         fi
 
