@@ -1,4 +1,4 @@
-#!/bin/ksh
+#!/bin/sh
 #####################################################################################################################
 #
 # Name:          dotfile
@@ -778,7 +778,7 @@ function setup_role_dependencies
 
     
     # Find our dependencies, should be of the format role <dependency>
-    DEPS_LIST=$(grep "^role " "$ROLE_DEPS" | sed 's/ /,/g')
+    DEPS_LIST=$(grep "^[rR][oO][lL][eE] " "$ROLE_DEPS" | sed 's/ /,/g')
     
     for DEP_ROLE in ${DEPS_LIST}; do
         ROLE_NAME=$(printf "%s\n" "${DEP_ROLE}" | cut -d, -f2)
@@ -919,7 +919,7 @@ function setup_role_environment
     #read_config "$ROLE_ENV" | while read -r action name value; do
     
     # Format of the env variable file is (set|prepend|append) <name> <value>
-    PARAMS=$(grep -E "^(set|prepend|append) " "$ROLE_ENV" | cut -d" " -f2)
+    PARAMS=$(grep -iE "^(set|prepend|append) " "$ROLE_ENV" | cut -d" " -f2)
         
     for PARAM in ${PARAMS}; do
         
@@ -928,8 +928,8 @@ function setup_role_environment
         
         # Extract the exact line
         name="$PARAM"
-        line=$(grep -E "^(set|prepend|append) ${PARAM_SAFE} " "$ROLE_ENV")
-        action=$( printf "%s\n" "$line" | cut -d" " -f1  )
+        line=$(grep -iE "^(set|prepend|append) ${PARAM_SAFE} " "$ROLE_ENV")
+        action=$( printf "%s\n" "$line" | cut -d" " -f1  | tr '[A-Z]' '[a-z]' )
         value=$(  printf "%s\n" "$line" | cut -d" " -f3- )
 
         case "$action" in
@@ -1157,7 +1157,7 @@ function setup_role_files
             BASE_PATH=$(echo ~)
             
             FILES_LIST=""
-            [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^file ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
+            [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^[fF][iI][lL][eE] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
             [[ -n "${FILES_LIST}" ]] && BASE_PATH="${FILES_LIST}"
             
             FILES_MANAGED=$(grep -v "^${SHORT_NAME_SAFE} " "${BASE_PATH}/.dotfile.managed")
@@ -1176,9 +1176,9 @@ function setup_role_files
             if ${FILE_EXISTS}; then
 
                 CKSUM_METHOD=""
-                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_METHOD=$(grep -v "^hash ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
+                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_METHOD=$(grep -v "^[hH][aA][sS][hH] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3 | tr '[A-Z]' '[a-z]')
                 CKSUM_VALUE=""
-                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_VALUE=$(grep -v "^hash ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f4-)
+                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_VALUE=$(grep -v "^[hH][aA][sS][hH] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f4-)
                 
                 case "${CKSUM_METHOD}" in
                 
@@ -1405,10 +1405,10 @@ function setup_role_links
         if [[ -f "$ROLE_PATH/meta" ]]; then
             
             # When building links you can chmod it as well, extract both information
-            OVERRIDES=$(grep -E "^(chmod|link) ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta")
+            OVERRIDES=$(grep -iE "^(chmod|link) ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta")
 
-            CHMOD_PERMS=$(printf "%s\n" "${OVERRIDES}" | grep "^chmod " | head -1 | cut -d" " -f3)
-            LINKS_LIST=$( printf "%s\n" "${OVERRIDES}" | grep "^link "  | head -1 | cut -d" " -f3)
+            CHMOD_PERMS=$(printf "%s\n" "${OVERRIDES}" | grep -i "^chmod " | head -1 | cut -d" " -f3)
+            LINKS_LIST=$( printf "%s\n" "${OVERRIDES}" | grep -i "^link "  | head -1 | cut -d" " -f3)
                 
             [[ -n "${LINKS_LIST}" ]] && BASE_PATH="${LINKS_LIST}"
         fi
@@ -1599,7 +1599,7 @@ function teardown_role_dependencies
     [[ ! -f "$ROLE_DEPS" ]] && return $SUCCESS
     
     
-    DEPS_LIST=$(grep "^role " "$ROLE_DEPS" | sed 's/ /,/g' | reverse_lines)
+    DEPS_LIST=$(grep "^[rR][oO][lL][eE] " "$ROLE_DEPS" | sed 's/ /,/g' | reverse_lines)
         
     for DEP_ROLE in ${DEPS_LIST}; do
         ROLE_NAME=$(printf "%s\n" "${DEP_ROLE}" | cut -d, -f2)
@@ -1737,13 +1737,13 @@ function teardown_role_environment
         # Need to remove the need for a while loop as this spawns a subshell in POSIX / bash so the exports arent exposed
         #read_config "$ROLE_ENV" | while read -r action name value; do
         
-        PARAMS=$(grep -E "^(set|prepend|append) " "$ROLE_ENV" | reverse_lines | cut -d" " -f2)
+        PARAMS=$(grep -iE "^(set|prepend|append) " "$ROLE_ENV" | reverse_lines | cut -d" " -f2)
         
         for PARAM in ${PARAMS}; do
         
             PARAM_SAFE=$(escape_regex_extended "${PARAM}")
-            line=$(grep -E "^(set|prepend|append) $PARAM_SAFE " "$ROLE_ENV")
-            action=$(printf "%s\n" "$line" | cut -d" " -f1)
+            line=$(grep -iE "^(set|prepend|append) $PARAM_SAFE " "$ROLE_ENV")
+            action=$(printf "%s\n" "$line" | cut -d" " -f1 | tr '[A-Z]' '[a-z]')
             name="$PARAM"
             value=$(printf "%s\n" "$line" | cut -d" " -f3-)
             new_value="$value"
@@ -1915,9 +1915,53 @@ function teardown_role_paths
 
     if [[ "$USE_PATHS" == "true" ]]; then
     
-        [[ -d "$ROLE_BIN" ]] && export PATH=$(printf "%s\n" "$PATH" | sed "s|^$ROLE_BIN:||g")
-        [[ -d "$ROLE_FUN" ]] && export FPATH=$(printf "%s\n" "$FPATH" | sed "s|^$ROLE_FUN:||g")
-        [[ -d "$ROLE_LIB" ]] && export LD_LIBRARY_PATH=$(printf "%s\n" "$LD_LIBRARY_PATH" | sed "s|^$ROLE_LIB:||g")
+        DIRECTION_BIN=""
+        DIRECTION_LIB=""
+        DIRECTION_FUN=""
+        
+        if [[ -f "$ROLE_PATH/meta" ]]; then
+        
+            DIRECTION_BIN=$(grep "^path-method bin (append|prepend|none)\$" "$ROLE_PATH/meta" | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
+            DIRECTION_LIB=$(grep "^path-method lib (append|prepend|none)\$" "$ROLE_PATH/meta" | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
+            DIRECTION_FUN=$(grep "^path-method funcs (append|prepend|none)\$" "$ROLE_PATH/meta" | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
+            
+        fi
+        
+        case "${DIRECTION_BIN:-prepend}" in
+        
+            prepend ) [[ -d "$ROLE_BIN" ]] && export PATH=$(printf "%s\n" "$PATH" | sed "s|^$ROLE_BIN:||g")
+                      ;;
+            append  ) [[ -d "$ROLE_BIN" ]] && export PATH=$(printf "%s\n" "$PATH" | sed "s|:?${ROLE_BIN}\$||g")
+                      ;;
+            none    ) ;;
+            *       ) return 65
+                      ;;
+        
+        esac
+        
+        case "${DIRECTION_FUN:-prepend}" in
+        
+            prepend ) [[ -d "$ROLE_FUN" ]] && export FPATH=$(printf "%s\n" "$FPATH" | sed "s|^$ROLE_FUN:||g")
+                      ;;
+            append  ) [[ -d "$ROLE_FUN" ]] && export FPATH=$(printf "%s\n" "$FPATH" | sed "s|:?${ROLE_FUN}\$||g")
+                      ;;
+            none    ) ;;
+            *       ) return 65
+                      ;;
+        
+        esac
+        
+        case "${DIRECTION_LIB:-prepend}" in
+        
+            prepend ) [[ -d "$ROLE_LIB" ]] && export LD_LIBRARY_PATH=$(printf "%s\n" "$LD_LIBRARY_PATH" | sed "s|^$ROLE_LIB:||g")
+                      ;;
+            append  ) [[ -d "$ROLE_LIB" ]] && export LD_LIBRARY_PATH=$(printf "%s\n" "$LD_LIBRARY_PATH" | sed "s|:?${ROLE_LIB}\$||g")
+                      ;;
+            none    ) ;;
+            *       ) return 65
+                      ;;
+        
+        esac
 
     fi
     
@@ -1992,7 +2036,7 @@ function teardown_role_files
             BASE_PATH=$(echo ~)
             
             FILES_LIST=""
-            [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^file ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
+            [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^[fF][iI][lL][eE] ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
             [[ -n "${FILES_LIST}" ]] && BASE_PATH="${FILES_LIST}"
             
             FILES_MANAGED=$(grep -v "^${SHORT_NAME} " "${BASE_PATH}/.dotfile.managed")
@@ -2011,9 +2055,9 @@ function teardown_role_files
             if ${FILE_EXISTS}; then
 
                 CKSUM_METHOD=""
-                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_METHOD=$(grep -v "^hash ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
+                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_METHOD=$(grep -v "^[hH][aA][sS][hH] ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3 | tr '[A-Z]' '[a-z]' )
                 CKSUM_VALUE=""
-                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_VALUE=$(grep -v "^hash ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f4-)
+                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_VALUE=$(grep -v "^[hH][aA][sS][hH] ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f4-)
                 
                 case "${CKSUM_METHOD}" in
                 
@@ -2148,7 +2192,7 @@ function teardown_role_files
                 ${DEBUG} && log_it DEBUG COPYING "cp --recursive --archive '${name}' '${BASE_PATH}/${SHORT_NAME}'"
                 cp --recursive --archive "${name}" "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    print_error "Could not add file from role [%s]" "${ROLE_PATH}"
+                    print_error "Could not add file to role [%s]" "${ROLE_PATH}"
                     return 5
                 fi
                 
@@ -2228,7 +2272,7 @@ function teardown_role_links
             LINKS_LIST=""
             
             # Check if there is a role configuration file redirecting this link
-            [[ -f "$ROLE_PATH/meta" ]] && LINKS_LIST=$(grep -v "^link ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
+            [[ -f "$ROLE_PATH/meta" ]] && LINKS_LIST=$(grep -v "^[lL][iI][nN][kK] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
             [[ -n "${LINKS_LIST}" ]] && BASE_PATH="${LINKS_LIST}"
             
             # Check if link already exists, if so, remove it
@@ -2237,7 +2281,7 @@ function teardown_role_links
                 "${DEBUG}" && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
                 rm -f "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    print_error "Could not add reset symbolic links from role [%s]" "${ROLE_PATH}"
+                    print_error "Could not reset symbolic links from role [%s]" "${ROLE_PATH}"
                     return 4
                 fi
 
@@ -2451,6 +2495,8 @@ case "$MAIN_CMD" in
 esac
 
 
+RC=$SUCCESS
+
 # We perform this seperately than the above so that we arent modifying environment variables simply because we've been asked to describe something
 export DOTFILES_ALLOCATION_INDEX="${DOTFILES_ALLOCATION_INDEX:-0}"
 
@@ -2458,10 +2504,13 @@ export DOTFILES_ALLOCATION_INDEX="${DOTFILES_ALLOCATION_INDEX:-0}"
 case "$MAIN_CMD" in
 
     request            ) request_role  "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" ${FUNC_SWITCHES}
+                         RC=$?
                          ;;
     release            ) release_role  "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" ${FUNC_SWITCHES}
+                         RC=$?
                          ;;
     reset              ) release_role  "@"         "$NEW_ROLE_ACTION" "$ROLE_LIST" ${FUNC_SWITCHES}
+                         RC=$?
                          ;;
     
 esac
@@ -2469,4 +2518,4 @@ esac
 # Remove if becomes unnecessary
 [[ "${DOTFILES_ALLOCATION_INDEX}" -le 0 ]] && unset DOTFILES_ALLOCATION_INDEX
 
-return $SUCCESS
+return $RC
