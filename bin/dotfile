@@ -4,7 +4,9 @@
 # Name:          dotfile
 # Developer:     Philip Bowditch
 # Created:       20151110
-# Description:   
+# Description:   Encourages the version control, documentation and sharing of *NIX dot files.  Provides a highly
+#                configurable user environment where those core files / settings can be seperated out into roles
+#                and called / released at will, providing a clean setup.  
 #
 #####################################################################################################################
 
@@ -17,6 +19,12 @@ ERR_ROLE_NOT_FOUND=3
 
 ERR_AUTHENTICATION_FAILED=10
 ERR_AUTHORIZATION_FAILED=20
+
+ERR_CREATE_ALIAS_FAILED=50
+ERR_CREATE_DEPENDECY_FAILED=51
+
+ERR_DELETE_ALIAS_FAILED=80
+ERR_DELETE_DEPENDENCY_FAILED=81
 
 SUCCESS=0
 
@@ -105,6 +113,22 @@ function log_it
     shift 2
 
     [[ -n "$DOTFILES_LOG" ]] && printf "%s: %s: %s: %s: %s\n" "$(date +%Y%m%d%H%M%S)" "${USER}" $$ "${CATEGORY}" "$@" >> "$DOTFILES_LOG"
+}
+
+function print_error
+{
+    ####################################################################################
+    #
+    # Description:  Utility function to print out an error message in a common format
+    # Parameters:   1 - The printf pattern to output
+    #               * - The tokens to pass in
+    # 
+    ####################################################################################
+    
+    MSG="$1"
+    shift
+    
+    printf "%s: ${MSG}\n" ERROR "$@" >&2
 }
 
 function get_env
@@ -282,21 +306,21 @@ function validate_role
     ROLE_FOUND=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
 
     if [[ -z "${ROLE_FOUND}" ]]; then
-        printf "%s: Role [%s] is unrecognised, use %s to print out supported roles\n" ERROR "$NEW_ROLE" "$DOTFILES_HOME/bin/dotfile list" >&2
+        print_error "Role [%s] is unrecognised, use %s to print out supported roles" "$NEW_ROLE" "$DOTFILES_HOME/bin/dotfile list"
         return $ERR_ROLE_NOT_FOUND
     fi
 
     "${DOTFILES_AUTHENTICATE_PATH:-true}" "$USER"
     if [[ $? -ne 0 ]]; then
         log_it ERROR REQUEST "$NEW_ROLE"
-        printf "%s: Could not authenticate user [%s].  Exiting\n" ERROR "$USER" >&2
+        print_error "Could not authenticate user [%s].  Exiting" "$USER"
         return $ERR_AUTHENTICATION_FAILED
     fi
 
     "${DOTFILES_AUTHORIZE_PATH:-true}" "$USER" "$NEW_ROLE"
     if [[ $? -ne 0 ]]; then
         log_it ERROR REQUEST "$NEW_ROLE"
-        printf "%s: User [%s] is not granted access to role [%s].  Exiting\n" ERROR "$USER" "$NEW_ROLE" >&2
+        print_error "User [%s] is not granted access to role [%s].  Exiting" "$USER" "$NEW_ROLE"
         return $ERR_AUTHORIZATION_FAILED
     fi
 
@@ -396,7 +420,7 @@ function describe_role
         cat "${ROLE_PATH}/dependencies"
 
         if [[ $? -ne 0 ]]; then
-            printf "%s: Could not output role [%s]\n" ERROR "${ROLE_PATH}" >&2
+            print_error "Could not output role [%s]" "${ROLE_PATH}"
             return 4
         fi
 
@@ -469,15 +493,17 @@ function release_role
 
     validate_role "${NEW_ROLE}" "$ROLE_LIST" || return $?
     
-    # Exit if role is not ready to be released (strict ordering is important)
+    # Exit if role is not ready to be released (strict ordering is important so its a !=)
     ROLE_INDEX=$(get_env | grep "^DOTFILES_ADD_ROLE__${NEW_ROLE_UPPER}=" | cut -d"=" -f2)
     if [[ "${DOTFILES_ALLOCATION_INDEX}" -ne "${ROLE_INDEX}" ]]; then
         return 0
     fi
 
+    # Remoe any global identifiers we may have set, including the index
     eval unset DOTFILES_ADD_ROLE__${NEW_ROLE_UPPER}
     export DOTFILES_ALLOCATION_INDEX=$(( DOTFILES_ALLOCATION_INDEX - 1 ))
     
+    # Perform stages in reverse order, e.g. if it was A B C D, now its D C B A
     REVERSE_EVALUATION_ORDER=$( printf "%s\n" "${DOTFILES_EVALUATION_ORDER}" | reverse_words )
     for STAGE in ${REVERSE_EVALUATION_ORDER}; do
     
@@ -656,8 +682,8 @@ function setup_role_aliases
 
             eval alias -- "${ALIAS_DEF}"="${value}"
             if [[ $? -ne 0 ]]; then
-                printf "%s: Could not create alias [%s] from role [%s]\n" ERROR "${ALIAS_DEF}" "${ROLE_PATH}" >&2
-                return 3
+                print_error "Could not create alias [%s] from role [%s]" "${ALIAS_DEF}" "${ROLE_PATH}"
+                return $ERR_CREATE_ALIAS_FAILED
             fi
 
         done
@@ -737,8 +763,8 @@ function setup_role_dependencies
             # NOTE: We do not add an option for use dependencies, it is assumed otherwise we would not have got this far in the function
             . $DOTFILES_HOME/bin/dotfile ${REVERSE_FUNC_SWITCHES} request "${ROLE_NAME}"
             if [[ $? -ne 0 ]]; then
-                printf "%s: Could not add dependency [%s] from role [%s]\n" ERROR "$ROLE_NAME" "$ROLE_PATH" >&2
-                return 3
+                print_error "Could not add dependency [%s] from role [%s]" "$ROLE_NAME" "$ROLE_PATH"
+                return $ERR_CREATE_DEPENDECY_FAILED
             fi
             
             # Reset input parameters, there is a chance that any script we source can change these values
@@ -872,19 +898,19 @@ function setup_role_environment
             
                 set     ) eval export "${name}"="${value}"
                           if [[ $? -ne 0 ]]; then
-                              printf "%s: Could not create environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
+                              print_error "Could not create environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
                               return 3
                           fi
                           ;;
                 prepend ) eval export "${name}"="${value}\$${name}"
                           if [[ $? -ne 0 ]]; then
-                              printf "%s: Could not prepend environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
+                              print_error "Could not prepend environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
                               return 3
                           fi
                           ;;
                 append  ) eval export "${name}"="\$${name}${value}"
                           if [[ $? -ne 0 ]]; then
-                              printf "%s: Could not append environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
+                              print_error "Could not append environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
                               return 3
                           fi
                           ;;
@@ -960,7 +986,7 @@ function setup_role_script
         . "${ROLE_MAIN}" --setup
 
         if [[ $? -ne 0 ]]; then
-            printf "%s: Could not run script from role [%s]\n" ERROR "${ROLE_PATH}" >&2
+            print_error "Could not run script from role [%s]" "${ROLE_PATH}"
             return 3
         fi
 
@@ -1082,6 +1108,7 @@ function setup_role_files
     # First step is to create links if configured and the role contains them
     if [[ "$USE_FILE" == "true" && -d "${ROLE_FILE}" ]]; then
     
+        # Find direct children
         TARGETS=$(find "$ROLE_FILE" -maxdepth 1 -mindepth 1 2>/dev/null)
         
         # Go through all the files/folders found in the links folder as we need to point to them as symbolic
@@ -1091,7 +1118,7 @@ function setup_role_files
             SHORT_NAME=$(basename "${name}")
             SHORT_NAME_SAFE=$(escape_regex "${SHORT_NAME}")
             
-            BASE_PATH="${HOME}"
+            BASE_PATH=$(echo ~)
             
             FILES_LIST=""
             [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^file ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
@@ -1210,14 +1237,14 @@ function setup_role_files
                 ${DEBUG} && log_it DEBUG CLEANUP "grep -v '^${SHORT_NAME_SAFE} ' '${BASE_PATH}/.dotfile.managed' > '${BASE_PATH}/.dotfile.managed2'"
                 grep -v "^${SHORT_NAME_SAFE} " "${BASE_PATH}/.dotfile.managed" > "${BASE_PATH}/.dotfile.managed2"
                 if [[ $? -ne 0 ]]; then
-                    printf "%s: Could not remove file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
+                    print_error "Could not remove file from role [%s]" "${ROLE_PATH}"
                     return 4
                 fi
                 
                 ${DEBUG} && log_it DEBUG CLEANUP "mv '${BASE_PATH}/.dotfile.managed2' '${BASE_PATH}/.dotfile.managed'"
                 mv "${BASE_PATH}/.dotfile.managed2" "${BASE_PATH}/.dotfile.managed"
                 if [[ $? -ne 0 ]]; then
-                    printf "%s: Could not add file to role [%s]\n" ERROR "${ROLE_PATH}" >&2
+                    print_error "Could not add file to role [%s]" "${ROLE_PATH}"
                     return 4
                 fi
                 
@@ -1229,7 +1256,7 @@ function setup_role_files
                 ${DEBUG} && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
                 rm -f "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    printf "%s: Could not remove file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
+                    print_error "Could not remove file from role [%s]" "${ROLE_PATH}"
                     return 4
                 fi
                 
@@ -1241,7 +1268,7 @@ function setup_role_files
                 ${DEBUG} && log_it DEBUG COPYING "printf '%s %s %s\n' '${SHORT_NAME}' '${ACTUAL_VALUE}' '${name}' >> '${BASE_PATH}/.dotfile.managed'"
                 printf "%s %s %s\n" "${SHORT_NAME}" "${ACTUAL_VALUE}" "${name}" >> "${BASE_PATH}/.dotfile.managed"
                 if [[ $? -ne 0 ]]; then
-                    printf "%s: Could not add metadata to [%s] to manage file copy from role [%s]\n" ERROR "${BASE_PATH}/${SHORT_NAME}" "${ROLE_PATH}" >&2
+                    print_error "Could not add metadata to [%s] to manage file copy from role [%s]" "${BASE_PATH}/${SHORT_NAME}" "${ROLE_PATH}"
                     return 5
                 fi
                 
@@ -1252,7 +1279,7 @@ function setup_role_files
                 ${DEBUG} && log_it DEBUG COPYING "cp --recursive --archive '${name}' '${BASE_PATH}/${SHORT_NAME}'"
                 cp --recursive --archive "${name}" "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    printf "%s: Could not add file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
+                    print_error "Could not add file from role [%s]" "${ROLE_PATH}"
                     return 5
                 fi
                 
@@ -1319,24 +1346,28 @@ function setup_role_links
     # First step is to create links if configured and the role contains them
     if [[ -d "${ROLE_LINK}" ]]; then
     
+        # Find direct children
         TARGETS=$(find "$ROLE_LINK" -maxdepth 1 -mindepth 1 2>/dev/null)
 
         # Go through all the files/folders found in the links folder as we need to point to them as symbolic
         # links in the users home directory
         for name in ${TARGETS}; do
         
+            # Escape the name of the link as will be used for egrep
             SHORT_NAME=$(basename "${name}")
             SHORT_NAME_SAFE=$(escape_regex_extended "${SHORT_NAME}")
 
             # Determines whether we need to create the link (ie we dont rebuild a link if it already exists)
             REBUILD_LINK=true
             
-            BASE_PATH="${HOME}"
+            # By default all links are created in the home directory unless overriden
+            BASE_PATH=$(echo ~)
             
             LINKS_LIST=""
             CHMOD_PERMS=""
             if [[ -f "$ROLE_PATH/meta" ]]; then
             
+                # When building links you can chmod it as well, extract both information
                 OVERRIDES=$(grep -E "^(chmod|link) ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta")
 
                 CHMOD_PERMS=$(printf "%s\n" "${OVERRIDES}" | grep "^chmod " | head -1 | cut -d" " -f3)
@@ -1349,7 +1380,7 @@ function setup_role_links
             if [[ -L "${BASE_PATH}/${SHORT_NAME}" ]]; then
 
                 ORIG_TARGET=$(readlink --canonicalize "${BASE_PATH}/${SHORT_NAME}")
-                NEW_TARGET=$(readlink --canonicalize "${name}")
+                NEW_TARGET=$( readlink --canonicalize "${name}")
                 
                 # Perform quick check, nopoint rebuilding link if its going to be the same
                 # Also prevents danger that an already running processes requires the presence if this link
@@ -1362,7 +1393,7 @@ function setup_role_links
                     ${DEBUG} && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
                     rm -f "${BASE_PATH}/${SHORT_NAME}"
                     if [[ $? -ne 0 ]]; then
-                        printf "%s: Could not reset symbolic links from role [%s]\n" ERROR "${ROLE_PATH}" >&2
+                        print_error "Could not reset symbolic links from role [%s]" "${ROLE_PATH}"
                         return 4
                     fi
                     
@@ -1378,7 +1409,7 @@ function setup_role_links
                 ${DEBUG} && log_it DEBUG LINKING "ln -s '${name}' '${BASE_PATH}/${SHORT_NAME}'"
                 ln -s "${name}" "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    printf "%s: Could not add symbolic links from role [%s]\n" ERROR "${ROLE_PATH}" >&2
+                    print_error "Could not add symbolic links from role [%s]" "${ROLE_PATH}"
                     return 5
                 fi
                 
@@ -1457,7 +1488,7 @@ function teardown_role_aliases
         
         for ALIAS_DEF in ${ALIASES}; do
         
-            unalias "${ALIAS_DEF}" 2>/dev/null
+            unalias -- "${ALIAS_DEF}" 2>/dev/null
             # No point monitoring for error, alias wont be there
             
         done
@@ -1537,8 +1568,8 @@ function teardown_role_dependencies
             
             . $DOTFILES_HOME/bin/dotfile ${REVERSE_FUNC_SWITCHES} release "${ROLE_NAME}"
             if [[ $? -ne 0 ]]; then
-                printf "%s: Could not remove dependency [%s] from role [%s]\n" ERROR "${ROLE_NAME}" "${NEW_ROLE}" >&2
-                return 4
+                print_error "Could not remove dependency [%s] from role [%s]" "${ROLE_NAME}" "${NEW_ROLE}"
+                return $ERR_DELETE_DEPENDENCY_FAILED
             fi
             
             # Reset input parameters, there is a chance that any script we source can change these values
@@ -1675,7 +1706,7 @@ function teardown_role_environment
                 
                           unset "${name}"
                           if [[ $? -ne 0 ]]; then
-                              printf "%s: Could not unset environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
+                              print_error "Could not unset environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
                               return 3
                           fi
                           ;;
@@ -1685,7 +1716,7 @@ function teardown_role_environment
                           
                           export ${name}="$new_value"
                           if [[ $? -ne 0 ]]; then
-                              printf "%s: Could not pop environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
+                              print_error "Could not pop environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
                               return 3
                           fi
                           ;;
@@ -1695,7 +1726,7 @@ function teardown_role_environment
                           
                           export ${name}="$new_value"
                           if [[ $? -ne 0 ]]; then
-                              printf "%s: Could not shift environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
+                              print_error "Could not shift environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
                               return 3
                           fi
                           ;;
@@ -1774,7 +1805,7 @@ function teardown_role_script
         . "${ROLE_MAIN}" --teardown
 
         if [[ $? -ne 0 ]]; then
-            printf "%s: Could not release role [%s]\n" ERROR "${ROLE_PATH}" >&2
+            print_error "Could not release role [%s]" "${ROLE_PATH}"
             return 3
         fi
 
@@ -1907,7 +1938,7 @@ function teardown_role_files
         
             SHORT_NAME=$(basename "${name}")
             
-            BASE_PATH="${HOME}"
+            BASE_PATH=$(echo ~)
             
             FILES_LIST=""
             [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^file ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
@@ -2024,14 +2055,14 @@ function teardown_role_files
                 ${DEBUG} && log_it DEBUG CLEANUP "grep -v '^${SHORT_NAME} ' '${BASE_PATH}/.dotfile.managed' > '${BASE_PATH}/.dotfile.managed2'"
                 grep -v "^${SHORT_NAME} " "${BASE_PATH}/.dotfile.managed" > "${BASE_PATH}/.dotfile.managed2"
                 if [[ $? -ne 0 ]]; then
-                    printf "%s: Could not add remove file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
+                    print_error "Could not add remove file from role [%s]" "${ROLE_PATH}"
                     return 4
                 fi
                 
                 ${DEBUG} && log_it DEBUG CLEANUP "mv '${BASE_PATH}/.dotfile.managed2' '${BASE_PATH}/.dotfile.managed'"
                 mv "${BASE_PATH}/.dotfile.managed2" "${BASE_PATH}/.dotfile.managed"
                 if [[ $? -ne 0 ]]; then
-                    printf "%s: Could not add file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
+                    print_error "Could not add file from role [%s]" "${ROLE_PATH}"
                     return 4
                 fi
                 
@@ -2043,7 +2074,7 @@ function teardown_role_files
                 ${DEBUG} && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
                 rm -f "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    printf "%s: Could not remove file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
+                    print_error "Could not remove file from role [%s]" "${ROLE_PATH}"
                     return 4
                 fi
                 
@@ -2055,7 +2086,7 @@ function teardown_role_files
                 ${DEBUG} && log_it DEBUG COPYING "printf '%s %s %s\n' '${SHORT_NAME}' '${ACTUAL_VALUE}' '${name}' >> '${BASE_PATH}/.dotfile.managed'"
                 printf "%s %s %s\n" "${SHORT_NAME}" "${ACTUAL_VALUE}" "${name}" >> "${BASE_PATH}/.dotfile.managed"
                 if [[ $? -ne 0 ]]; then
-                    printf "%s: Could not add metadata to [%s] to manage file copy from role [%s]\n" ERROR "${BASE_PATH}/${SHORT_NAME}" "${ROLE_PATH}" >&2
+                    print_error "Could not add metadata to [%s] to manage file copy from role [%s]" "${BASE_PATH}/${SHORT_NAME}" "${ROLE_PATH}"
                     return 5
                 fi
                 
@@ -2066,7 +2097,7 @@ function teardown_role_files
                 ${DEBUG} && log_it DEBUG COPYING "cp --recursive --archive '${name}' '${BASE_PATH}/${SHORT_NAME}'"
                 cp --recursive --archive "${name}" "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    printf "%s: Could not add file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
+                    print_error "Could not add file from role [%s]" "${ROLE_PATH}"
                     return 5
                 fi
                 
@@ -2142,7 +2173,7 @@ function teardown_role_links
             SHORT_NAME=$(basename "${name}")
             SHORT_NAME_SAFE=$(escape_regex "${SHORT_NAME}")
 
-            BASE_PATH="${HOME}"
+            BASE_PATH=$(echo ~)
             LINKS_LIST=""
             
             # Check if there is a role configuration file redirecting this link
@@ -2155,7 +2186,7 @@ function teardown_role_links
                 "${DEBUG}" && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
                 rm -f "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    printf "%s: Could not add reset symbolic links from role [%s]\n" ERROR "${ROLE_PATH}" >&2
+                    print_error "Could not add reset symbolic links from role [%s]" "${ROLE_PATH}"
                     return 4
                 fi
 
@@ -2183,22 +2214,22 @@ then
         . "${DOTFILES_CONFIG}"
         if [[ $? -ne 0 ]]
         then
-            printf "%s: Could not source '%s'.  This is defined in the environment variable %s.  Exiting\n" ERROR "$DOTFILES_CONFIG" DOTFILES_CONFIG >&2
+            print_error "Could not source '%s'.  This is defined in the environment variable %s.  Exiting" "$DOTFILES_CONFIG" DOTFILES_CONFIG
             return 1
         fi
     else
-        printf "%s: Could not source '%s'.  This is defined in the environment variable %s but does not exist.  Exiting\n" ERROR "$DOTFILES_CONFIG" DOTFILES_CONFIG >&2
+        print_error "Could not source '%s'.  This is defined in the environment variable %s but does not exist.  Exiting" "$DOTFILES_CONFIG" DOTFILES_CONFIG
         return 1
     fi
 fi
 
 # Check if user has this in their home directory
-if [[ -f "$HOME/.dotfiles.cfg" ]]
+if [[ -f "~/.dotfiles.cfg" ]]
 then
-    . "$HOME/.dotfiles.cfg"
+    . "~/.dotfiles.cfg"
     if [[ $? -ne 0 ]]
     then
-        printf "%s: Could not source '%s'.  Exiting\n" ERROR "$HOME/.dotfiles.cfg" >&2
+        print_error "Could not source '%s'.  Exiting" "~/.dotfiles.cfg"
         return 1
     fi
 fi
@@ -2208,7 +2239,7 @@ then
     . "$DOTFILES_HOME/etc/dotfiles.cfg"
     if [[ $? -ne 0 ]]
     then
-        printf "%s: Could not source '%s'.  Exiting\n" ERROR "${DOTFILES_HOME}/etc/dotfiles.cfg" >&2
+        print_error "Could not source '%s'.  Exiting" "${DOTFILES_HOME}/etc/dotfiles.cfg"
         return 1
     fi
 fi
@@ -2218,7 +2249,7 @@ then
     . "$DOTFILES_ADMIN_CONFIG"
     if [[ $? -ne 0 ]]
     then
-        printf "%s: Could not source '%s'.  Exiting\n" ERROR "${DOTFILES_ADMIN_CONFIG}" >&2
+        print_error "Could not source '%s'.  Exiting" "${DOTFILES_ADMIN_CONFIG}"
         return 1
     fi
 fi
@@ -2233,19 +2264,19 @@ fi
 
 # Check if the log is writeable
 if [[ ! -r "$DOTFILES_LOG" ]]; then
-    printf "%s: The value of %s [%s] is not readable.  Exiting\n" ERROR DOTFILES_LOG "$DOTFILES_LOG" >&2
+    print_error "The value of %s [%s] is not readable.  Exiting" DOTFILES_LOG "$DOTFILES_LOG"
     return $ERR_INVALID_LOG_PATH
 fi
 
 # Check if the log is writeable
 if [[ ! -w "$DOTFILES_LOG" ]]; then
-    printf "%s: The value of %s [%s] is not writeable.  Exiting\n" ERROR DOTFILES_LOG "$DOTFILES_LOG" >&2
+    print_error "The value of %s [%s] is not writeable.  Exiting" DOTFILES_LOG "$DOTFILES_LOG"
     return $ERR_INVALID_LOG_PATH
 fi
 
 log_it INFO PARAMS "dotfile $@"
 if [[ $? -ne 0 ]]; then
-    printf "%s: Could not write to %s [%s] is not a valid file.  Exiting\n" ERROR DOTFILES_LOG "$DOTFILES_LOG" >&2
+    print_error "Could not write to %s [%s] is not a valid file.  Exiting" DOTFILES_LOG "$DOTFILES_LOG"
     return $ERR_INVALID_LOG_PATH
 fi
 
@@ -2272,48 +2303,28 @@ while [[ $# -ne 0 ]]; do
 
     case "$1" in
 
-        -A | --no-aliases      ) USE_ALIASES=false
-                                 shift
+        -A | --no-aliases      ) shift; USE_ALIASES=false
                                  ;;
-        
-        -F | --no-files        ) USE_FILES=false
-                                 shift
+        -F | --no-files        ) shift; USE_FILES=false
                                  ;;
-        
-        -K | --no-link         ) USE_LINK=false
-                                 shift
+        -K | --no-link         ) shift; USE_LINK=false
                                  ;;
-
-        -N | --no-env          ) USE_ENV=false
-                                 shift
+        -N | --no-env          ) shift; USE_ENV=false
                                  ;;
-
-        -D | --no-dependencies ) USE_DEPS=false
-                                 shift
+        -D | --no-dependencies ) shift; USE_DEPS=false
                                  ;;
-        
-        -P | --no-paths        ) USE_PATHS=false
-                                 shift
+        -P | --no-paths        ) shift; USE_PATHS=false
                                  ;;
-        
-        -S | --no-script       ) USE_SCRIPT=false
-                                 shift
+        -S | --no-script       ) shift; USE_SCRIPT=false
                                  ;;
-        
-        -x | --debug           ) DEBUG=true
-                                 shift
+        -x | --debug           ) shift; DEBUG=true
                                  ;;
-
-        -X | --trace           ) DEBUG=true
-                                 TRACE=true
-                                 shift
+        -X | --trace           ) shift; DEBUG=true; TRACE=true
                                  set -xv
                                  ;;
-
         -h | --help            ) usage
                                  return $SUCCESS
                                  ;;
-                                 
         *                      ) break
                                  ;;
 
@@ -2322,6 +2333,7 @@ while [[ $# -ne 0 ]]; do
 done
 
 
+# For easier parsing we'll use switches for our core functions
 FUNC_SWITCHES=""
 [[ "$USE_ALIASES" == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
 [[ "$USE_FILES"   == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --files"
