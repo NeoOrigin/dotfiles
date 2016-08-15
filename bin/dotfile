@@ -142,7 +142,7 @@ function normalize_role
 {
     ####################################################################################
     #
-    # Description:  Converts a filesystem role name into an environment parameter based
+    # Description:  Converts afile system role name into an environment parameter based
     #               role name (file system names can contain a signficantly wider
     #               set of characters.  
     # Parameters:   1 - Optional. The role name to normalize, uses stdin if not set
@@ -196,14 +196,14 @@ function get_role_path
 {
     NEW_ROLE="$1"
     ROLE_LIST="$2"
-    
+
     printf "%s\n" "${ROLE_LIST}" | grep -i ".*/${NEW_ROLE}$" | head -1
 }
 
 function list_roles
 {
     ROLES_PATH="$1"
-    
+
     # Find all roles installed on the machine / in known paths
     printf "%s\n" "${ROLES_PATH}" | sed 's/:/\n/g' | xargs -i find {} -maxdepth 1 -mindepth 1 2>/dev/null
 }
@@ -280,7 +280,7 @@ function help_role
         *       )  usage >&2
                    return $ERR_UNKNOWN_CMD
                    ;;
-        
+
     esac
 
     return $SUCCESS
@@ -305,9 +305,9 @@ function describe_role
     
     validate_role "${NEW_ROLE}" "$ROLE_LIST" || return $?
 
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_MAIN="$ROLE_PATH"
-    
+        
     # A role can be a script, however typically its a directory
     # defined with an entrypoint of main
     [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
@@ -374,7 +374,7 @@ function release_role
     eval unset "DOTFILES_ADD_ROLE__${NEW_ROLE_UPPER}"
     export DOTFILES_ALLOCATION_INDEX=$(( DOTFILES_ALLOCATION_INDEX - 1 ))
     
-    REVERSE_EVALUATION_ORDER=$( echo "${DOTFILES_EVALUATION_ORDER}" | reverse_words )
+    REVERSE_EVALUATION_ORDER=$( printf "%s\n" "${DOTFILES_EVALUATION_ORDER}" | reverse_words )
     for STAGE in ${REVERSE_EVALUATION_ORDER}; do
     
         case "${STAGE}" in
@@ -462,9 +462,9 @@ function setup_role_aliases
     
     # Quick exit if no aliases used
     [[ "$USE_ALIASES" == "false" ]] && return 0
-    
+
     # Find the role in our global roles list, it should be a leaf directory
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_ALIASES="$ROLE_PATH/aliases"
     
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
@@ -479,7 +479,7 @@ function setup_role_aliases
         for ALIAS_DEF in ${ALIASES}; do
         
             # Escape, suitable for grep
-            name=$(echo "$ALIAS_DEF" | sed 's|\.|\\.|g')
+            name=$(printf "%s\n" "$ALIAS_DEF" | sed 's|\.|\\.|g')
             value=$(grep "^$name " "$ROLE_ALIASES" | tail -1 | cut -d" " -f2-)
 
             eval alias -- "${ALIAS_DEF}"="'${value}'"
@@ -507,8 +507,8 @@ function setup_role_dependencies
     
     # Quick exit if no known dependencies
     [[ "$USE_DEPS" == "false" ]] && return 0
-    
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_DEPS="$ROLE_PATH/dependencies"
 
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
@@ -552,7 +552,7 @@ function setup_role_dependencies
             USE_LINK="$5"
             NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
             
-            ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+            ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
             ROLE_MAIN="$ROLE_PATH"
             ROLE_LINK="${ROLE_PATH}/links"
             ROLE_DEPS="${ROLE_PATH}/dependencies"
@@ -572,9 +572,9 @@ function setup_role_environment
     ROLE_LIST="$3"
     
     [[ "$USE_ENV" == "false" ]] && return 0
-    
+
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_ENV="$ROLE_PATH/env"
     
     # last step is to inherit the environment if configured and there is an executable file
@@ -589,27 +589,27 @@ function setup_role_environment
         
             PARAM_SAFE=$(escape_regex_extended "$PARAM")
             line=$(grep -E "^(set|prepend|append) ${PARAM_SAFE} " "$ROLE_ENV")
-            action=$(echo "$line" | cut -d" " -f1)
+            action=$(printf "%s\n" "$line" | cut -d" " -f1)
             name="$PARAM"
-            value=$(echo "$line" | cut -d" " -f3-)
+            value=$(printf "%s\n" "$line" | cut -d" " -f3-)
 
             case "$action" in
             
                 set     ) eval export "${name}"="${value}"
                           if [[ $? -ne 0 ]]; then
-                              echo "ERROR: Could not create environment variable [${name}] from role [${ROLE_PATH}]" >&2
+                              printf "%s: Could not create environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
                               return 3
                           fi
                           ;;
                 prepend ) eval export "${name}"="${value}\$${name}"
                           if [[ $? -ne 0 ]]; then
-                              echo "ERROR: Could not prepend environment variable [${name}] from role [${ROLE_PATH}]" >&2
+                              printf "%s: Could not prepend environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
                               return 3
                           fi
                           ;;
                 append  ) eval export "${name}"="\$${name}${value}"
                           if [[ $? -ne 0 ]]; then
-                              echo "ERROR: Could not append environment variable [${name}] from role [${ROLE_PATH}]" >&2
+                              printf "%s: Could not append environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
                               return 3
                           fi
                           ;;
@@ -630,9 +630,9 @@ function setup_role_script
     ROLE_LIST="$3"
     
     [[ "$USE_SCRIPT" == "false" ]] && return 0
-    
+
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_MAIN="$ROLE_PATH"
     
     # Incase the base path is a directory then we assume there might be a main file/script
@@ -662,7 +662,7 @@ function setup_role_paths
     ROLE_LIST="$3"
 
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_BIN="$ROLE_PATH/bin"
     ROLE_LIB="$ROLE_PATH/lib"
     ROLE_FUN="$ROLE_PATH/funcs"
@@ -684,7 +684,7 @@ function setup_role_files
     NEW_ROLE="$2"
     ROLE_LIST="$3"
     
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_FILE="$ROLE_PATH/files"
     
     # First step is to create links if configured and the role contains them
@@ -765,7 +765,7 @@ function setup_role_files
                 [[ $COMPARE_RESULT -eq 0 ]] && FILE_MATCHES=true
                 
                 if [[ "$IS_MANAGED" == "true" ]]; then
-                    MANAGED_CKSUM=$(echo "${FILES_MANAGED}" | cut -d" " -f2)
+                    MANAGED_CKSUM=$(printf "%s\n" "${FILES_MANAGED}" | cut -d" " -f2)
                     
                     [[ "$MANAGED_CKSUM" == "$ACTUAL_VALUE" ]] && META_MATCHES=true
                 fi
@@ -846,7 +846,7 @@ function setup_role_files
             if [[ "${ADD_ENTRY}" == "true" ]]; then
                 
                 # Record that we are now managing this file
-                ${DEBUG} && log_it DEBUG COPYING "echo '${SHORT_NAME} ${ACTUAL_VALUE} ${name}' >> '${BASE_PATH}/.dotfile.managed'"
+                ${DEBUG} && log_it DEBUG COPYING "printf '%s %s %s\n' '${SHORT_NAME}' '${ACTUAL_VALUE}' '${name}' >> '${BASE_PATH}/.dotfile.managed'"
                 printf "%s %s %s\n" "${SHORT_NAME}" "${ACTUAL_VALUE}" "${name}" >> "${BASE_PATH}/.dotfile.managed"
                 if [[ $? -ne 0 ]]; then
                     printf "%s: Could not add metadata to [%s] to manage file copy from role [%s]\n" ERROR "${BASE_PATH}/${SHORT_NAME}" "${ROLE_PATH}" >&2
@@ -879,11 +879,14 @@ function setup_role_links
     NEW_ROLE="$2"
     ROLE_LIST="$3"
     
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+    # Quick exit
+    [[ "$USE_LINK" == "false" ]] && return 0
+
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_LINK="$ROLE_PATH/links"
     
     # First step is to create links if configured and the role contains them
-    if [[ "$USE_LINK" == "true" && -d "${ROLE_LINK}" ]]; then
+    if [[ -d "${ROLE_LINK}" ]]; then
     
         TARGETS=$(find "$ROLE_LINK" -maxdepth 1 -mindepth 1 2>/dev/null)
 
@@ -905,8 +908,8 @@ function setup_role_links
             
                 OVERRIDES=$(grep -E "^(chmod|link) ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta")
 
-                CHMOD_PERMS=$(echo "${OVERRIDES}" | grep "^chmod " | head -1 | cut -d" " -f3)
-                LINKS_LIST=$(echo "${OVERRIDES}" | grep "^link " | head -1 | cut -d" " -f3)
+                CHMOD_PERMS=$(printf "%s\n" "${OVERRIDES}" | grep "^chmod " | head -1 | cut -d" " -f3)
+                LINKS_LIST=$( printf "%s\n" "${OVERRIDES}" | grep "^link "  | head -1 | cut -d" " -f3)
                 
                 [[ -n "${LINKS_LIST}" ]] && BASE_PATH="${LINKS_LIST}"
             fi
@@ -928,7 +931,7 @@ function setup_role_links
                     ${DEBUG} && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
                     rm -f "${BASE_PATH}/${SHORT_NAME}"
                     if [[ $? -ne 0 ]]; then
-                        printf "%s: Could not add reset symbolic links from role [%s]\n" ERROR "${ROLE_PATH}" >&2
+                        printf "%s: Could not reset symbolic links from role [%s]\n" ERROR "${ROLE_PATH}" >&2
                         return 4
                     fi
                     
@@ -970,8 +973,8 @@ function teardown_role_aliases
     ROLE_LIST="$3"
     
     [[ "$USE_ALIASES" == "false" ]] && return 0
-    
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_ALIASES="$ROLE_PATH/aliases"
     
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
@@ -1005,8 +1008,8 @@ function teardown_role_dependencies
     USE_SCRIPT="$9"
     
     [[ "$USE_DEPS" == "false" ]] && return 0
-    
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_DEPS="$ROLE_PATH/dependencies"
     
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
@@ -1015,7 +1018,7 @@ function teardown_role_dependencies
         DEPS_LIST=$(grep "^role " "$ROLE_DEPS" | sed 's/ /,/g' | reverse_lines)
         
         for DEP_ROLE in ${DEPS_LIST}; do
-            ROLE_NAME=$(echo "${DEP_ROLE}" | cut -d, -f2)
+            ROLE_NAME=$(printf "%s\n" "${DEP_ROLE}" | cut -d, -f2)
             
             # Propogate command line options as we are calling the script again
             NOENV=""
@@ -1047,9 +1050,9 @@ function teardown_role_dependencies
             ROLE_LIST="$3"
             USE_ENV="$4"
             USE_LINK="$5"
-            NEW_ROLE_UPPER=$(echo "${NEW_ROLE}" | normalize_role)
+            NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
             
-            ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+            ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
             ROLE_MAIN="$ROLE_PATH"
             ROLE_LINK="${ROLE_PATH}/links"
             ROLE_DEPS="${ROLE_PATH}/dependencies"
@@ -1067,12 +1070,12 @@ function teardown_role_environment
     USE_ENV="$1"
     NEW_ROLE="$2"
     ROLE_LIST="$3"
-    
+
     # Quick exit
     [[ "$USE_ENV" == "false" ]] && return 0
 
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_ENV="$ROLE_PATH/env"
 
     if [[ -f "$ROLE_ENV" ]]; then
@@ -1084,11 +1087,11 @@ function teardown_role_environment
         
         for PARAM in ${PARAMS}; do
         
-            PARAM_SAFE=$(esacpe_regex_extended "${PARAM}")
+            PARAM_SAFE=$(escape_regex_extended "${PARAM}")
             line=$(grep -E "^(set|prepend|append) $PARAM_SAFE " "$ROLE_ENV")
-            action=$(echo "$line" | cut -d" " -f1)
+            action=$(printf "%s\n" "$line" | cut -d" " -f1)
             name="$PARAM"
-            value=$(echo "$line" | cut -d" " -f3-)
+            value=$(printf "%s\n" "$line" | cut -d" " -f3-)
             new_value="$value"
             
             case "$action" in
@@ -1102,17 +1105,17 @@ function teardown_role_environment
                           fi
                           ;;
                 prepend ) #eval export ${name}=${value}${name}
-                          value_interpreted=$(eval echo "${value}")
+                          value_interpreted=$(eval printf "%s" "${value}")
                           new_value=$(env | grep "^${name}=" | sed "s|^${name}=||g" | sed "s|^${value_interpreted}||g")
                           
                           export "${name}"="$new_value"
                           if [[ $? -ne 0 ]]; then
-                              echo "ERROR: Could not pop environment variable [${name}] from role [${ROLE_PATH}]" >&2
+                              printf "%s: Could not pop environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
                               return 3
                           fi
                           ;;
                 append  ) #eval export ${name}=${value}${name}
-                          value_interpreted=$(eval echo "${value}")
+                          value_interpreted=$(eval printf "%s" "${value}")
                           new_value=$(env | grep "^${name}=" | sed "s|^${name}=||g" | sed "s|${value_interpreted}$||g")
                           
                           export "${name}"="$new_value"
@@ -1141,11 +1144,11 @@ function teardown_role_script
     USE_SCRIPT="$1"
     NEW_ROLE="$2"
     ROLE_LIST="$3"
-    
+
     [[ "$USE_SCRIPT" == "false" ]] && return 0
 
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_MAIN="$ROLE_PATH"
 
     # Incase the base path is a directory then we assume there might be a main file/script
@@ -1173,16 +1176,16 @@ function teardown_role_paths
     ROLE_LIST="$3"
 
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_BIN="$ROLE_PATH/bin"
     ROLE_LIB="$ROLE_PATH/lib"
     ROLE_FUN="$ROLE_PATH/funcs"
 
     if [[ "$USE_PATHS" == "true" ]]; then
     
-        [[ -d "$ROLE_BIN" ]] && export PATH=$(echo "$PATH" | sed "s|^$ROLE_BIN||g")
-        [[ -d "$ROLE_FUN" ]] && export FPATH=$(echo "$FPATH" | sed "s|^$ROLE_FUN||g")
-        [[ -d "$ROLE_LIB" ]] && export LD_LIBRARY_PATH=$(echo "$LD_LIBRARY_PATH" | sed "s|^$ROLE_LIB||g")
+        [[ -d "$ROLE_BIN" ]] && export PATH=$(printf "%s\n" "$PATH" | sed "s|^$ROLE_BIN:||g")
+        [[ -d "$ROLE_FUN" ]] && export FPATH=$(printf "%s\n" "$FPATH" | sed "s|^$ROLE_FUN:||g")
+        [[ -d "$ROLE_LIB" ]] && export LD_LIBRARY_PATH=$(printf "%s\n" "$LD_LIBRARY_PATH" | sed "s|^$ROLE_LIB:||g")
 
     fi
     
@@ -1197,8 +1200,8 @@ function teardown_role_files
     ROLE_LIST="$3"
     
     [[ "$USE_FILE" == "false" ]] && return 0
-    
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_FILE="$ROLE_PATH/files"
     
     # First step is to create links if configured and the role contains them
@@ -1278,7 +1281,7 @@ function teardown_role_files
                 [[ $COMPARE_RESULT -eq 0 ]] && FILE_MATCHES=true
                 
                 if [[ "$IS_MANAGED" == "true" ]]; then
-                    MANAGED_CKSUM=$(echo "${FILES_MANAGED}" | cut -d" " -f2)
+                    MANAGED_CKSUM=$(printf "%s\n" "${FILES_MANAGED}" | cut -d" " -f2)
                     
                     [[ "$MANAGED_CKSUM" == "$ACTUAL_VALUE" ]] && META_MATCHES=true
                 fi
@@ -1336,7 +1339,7 @@ function teardown_role_files
                 ${DEBUG} && log_it DEBUG CLEANUP "mv '${BASE_PATH}/.dotfile.managed2' '${BASE_PATH}/.dotfile.managed'"
                 mv "${BASE_PATH}/.dotfile.managed2" "${BASE_PATH}/.dotfile.managed"
                 if [[ $? -ne 0 ]]; then
-                   printf "%s: Could not add file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
+                    printf "%s: Could not add file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
                     return 4
                 fi
                 
@@ -1348,7 +1351,7 @@ function teardown_role_files
                 ${DEBUG} && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
                 rm -f "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    echo "ERROR: Could not remove file from role [${ROLE_PATH}]" >&2
+                    printf "%s: Could not remove file from role [%s]\n" ERROR "${ROLE_PATH}" >&2
                     return 4
                 fi
                 
@@ -1357,10 +1360,10 @@ function teardown_role_files
             if [[ "${ADD_ENTRY}" == "true" ]]; then
                 
                 # Record that we are now managing this file
-                ${DEBUG} && log_it DEBUG COPYING "echo '${SHORT_NAME} ${ACTUAL_VALUE} ${name}' >> '${BASE_PATH}/.dotfile.managed'"
-                echo "${SHORT_NAME} ${ACTUAL_VALUE} ${name}" >> "${BASE_PATH}/.dotfile.managed"
+                ${DEBUG} && log_it DEBUG COPYING "printf '%s %s %s\n' '${SHORT_NAME}' '${ACTUAL_VALUE}' '${name}' >> '${BASE_PATH}/.dotfile.managed'"
+                printf "%s %s %s\n" "${SHORT_NAME}" "${ACTUAL_VALUE}" "${name}" >> "${BASE_PATH}/.dotfile.managed"
                 if [[ $? -ne 0 ]]; then
-                    echo "ERROR: Could not add metadata to [${BASE_PATH}/${SHORT_NAME}] to manage file copy from role [${ROLE_PATH}]" >&2
+                    printf "%s: Could not add metadata to [%s] to manage file copy from role [%s]\n" ERROR "${BASE_PATH}/${SHORT_NAME}" "${ROLE_PATH}" >&2
                     return 5
                 fi
                 
@@ -1391,8 +1394,8 @@ function teardown_role_links
     ROLE_LIST="$3"
     
     [[ "$USE_LINK" == "false" ]] && return 0
-    
-    ROLE_PATH=$(get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_LINK="$ROLE_PATH/links"
     
     # First step is to create links if configured and the role contains them
@@ -1421,7 +1424,7 @@ function teardown_role_links
                 "${DEBUG}" && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
                 rm -f "${BASE_PATH}/${SHORT_NAME}"
                 if [[ $? -ne 0 ]]; then
-                    echo "ERROR: Could not add reset symbolic links from role [${ROLE_PATH}]" >&2
+                    printf "%s: Could not add reset symbolic links from role [%s]\n" ERROR "${ROLE_PATH}" >&2
                     return 4
                 fi
 
@@ -1614,7 +1617,7 @@ case "$MAIN_CMD" in
     *                  ) usage >&2
                          return $ERR_UNKNOWN_CMD
                          ;;
-    
+
 esac
 
 # Find all roles installed on the machine / in known paths
@@ -1628,8 +1631,8 @@ fi
 
 # Further commands interact directly with an already allocated role or a specific one that needs querying, reset is an exception as it has no arguments
 # however due to its implementation We call it like any other
-NEW_ROLE=$(        echo "$2" | cut -d":" -f1)
-NEW_ROLE_ACTION=$( echo "$2" | cut -d":" -f2)
+NEW_ROLE=$(        printf "%s\n" "$2" | cut -d":" -f1)
+NEW_ROLE_ACTION=$( printf "%s\n" "$2" | cut -d":" -f2)
 [[ "$MAIN_CMD" != "reset" ]] && shift
 
 
@@ -1643,6 +1646,7 @@ case "$MAIN_CMD" in
                          ;;
     
 esac
+
 
 # We perform this seperately than the above so that we arent modifying environment variables simply because we've been asked to describe something
 export DOTFILES_ALLOCATION_INDEX="${DOTFILES_ALLOCATION_INDEX:-0}"
