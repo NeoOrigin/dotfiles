@@ -6,39 +6,76 @@
 #               2 - The role name
 # 
 ####################################################################################
-    
-if [[ -f "${DOTFILES_AUTHORIZE_FILE}" ]]; then
 
-    GROUP_LIST=$(groups "${1}" | cut -d" " -f3-)
-    
-    grep -v "^#" ${DOTFILES_AUTHORIZE_FILE} | grep -v "^$" | while read -r userauth; do
+[[ ! -f "${DOTFILES_AUTHORIZE_FILE}" ]] && return 0
+
+
+# Holds the end result whether to allow or deny this user role request
+RESULT=1
+
+# Get the groups the incoming user is a member of
+GROUP_LIST=$(groups "${1}" | cut -d" " -f3-)
+
+# Format of the DOTFILES_AUTHORIZE_FILE looks like
+# (ALLOW|DENY) USERNAME[:GROUPNAME] role ... 
+# Note a user may have more than one entry
+grep -v "^#" ${DOTFILES_AUTHORIZE_FILE} | grep -v "^$" | while read -r userauth; do
+
+    AUTH_ALLOW=$(echo "${userauth}" | cut -d" " -f1-)
+    AUTH_ROLE_LIST=$(echo "${userauth}" | cut -d" " -f3-)
+    AUTH_USER=$(echo "${userauth}" | cut -d" " -f2)
+    AUTH_GROUP="*"
+
+    # Extract group if exists
+    if [[ "${AUTH_USER}" =~ .*:.* ]]; then
+        AUTH_USER=$( echo "${AUTH_USER}" | cut -d ":" -f1)
+        AUTH_GROUP=$(echo "${AUTH_USER}" | cut -d ":" -f2)
+    fi
+
+    #if [[ "${1}" =~ ^${AUTH_USER}$ ]]; then echo true; else echo false; fi
+    #if [[ "${GROUP_LIST}" =~ ^.*[ ]*${AUTH_GROUP}.*[ ]*$ ]]; then echo true; else echo false; fi
+    #if [[ "${2}" =~ ^.*[ ]*${AUTH_ROLE_LIST}.*[ ]*$ ]]; then echo true; else echo false; fi
+
+    # Perform some basic re matching again username, groupname and roles, if in list then success
+    if [[ "${1}" =~ ^${AUTH_USER}$ && "${GROUP_LIST}" =~ ^.*[ ]*${AUTH_GROUP}.*[ ]*$ && ${2} =~ ^.*[ ]*${AUTH_ROLE_LIST}.*[ ]*$ ]]; then
         
-        AUTH_ROLE_LIST=$(echo "${userauth}" | cut -d" " -f2-)
-        AUTH_USER=$(echo "${userauth}" | cut -d" " -f1)
-        AUTH_GROUP="*"
-            
-        if [[ "${AUTH_USER}" =~ .*:.* ]]; then
-            AUTH_USER=$(echo "${AUTH_USER}" | cut -d ":" -f1)
-            AUTH_GROUP=$(echo "${AUTH_USER}" | cut -d ":" -f2)
-        fi
-            
-        #if [[ "${1}" =~ ^${AUTH_USER}$ ]]; then echo true; else echo false; fi
-        #if [[ "${GROUP_LIST}" =~ ^.*[ ]*${AUTH_GROUP}.*[ ]*$ ]]; then echo true; else echo false; fi
-        #if [[ "${2}" =~ ^.*[ ]*${AUTH_ROLE_LIST}.*[ ]*$ ]]; then echo true; else echo false; fi
-            
-        # Perform some basic re matching again username, groupname and roles, if in list then success
-        if [[ "${1}" =~ ^${AUTH_USER}$ && "${GROUP_LIST}" =~ ^.*[ ]*${AUTH_GROUP}.*[ ]*$ ]]; then
-          
-            if [[ ${2} =~ ^.*[ ]*${AUTH_ROLE_LIST}.*[ ]*$ ]]; then
-                return 0
+        RESULT=0
+
+        if [[ "${AUTH_ALLOW}" == "DENY" ]]; then
+
+            RESULT=1
+
+            # If this is an explicit deny (based on the user or group, i.e. an exact match of either) we immediately exit
+            if [[ "${1}" == "${AUTH_USER}" ]]; then
+
+                return ${RESULT}
+
             fi
-                
-           return 1
+
+            printf "%s\n" "${GROUP_LIST}" | sed 's/[ ]/\n/g' | while read -r grpname; do
+
+                if [[ "${grpname}" == "${AUTH_GROUP}" ]]; then
+
+                        return ${RESULT}
+
+                fi
+
+            done
+
+            printf "%s\n" "${AUTH_ROLE_LIST}" | sed 's/[ ]/\n/g' | while read -r rolename; do
+
+                if [[ "${rolename}" == "${2}" ]]; then
+
+                        return ${RESULT}
+
+                fi
+
+            done
+
         fi
-            
-    done
 
-    return 1
-fi
+    fi
 
-return 0
+done
+
+return ${RESULT}
