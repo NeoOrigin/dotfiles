@@ -143,6 +143,17 @@ function print_error
     [[ -n "${EXITCODE}" ]] && exit $EXITCODE
 }
 
+function print_status
+{
+    APPLIED_ROLE=($(get_env | grep "^DOTFILES_ADD_ROLE__" | cut -d"_" -f5- | unnormalize_role | sed 's/=/ /g' | sort -k2,2 -nr))
+    
+    for ROLE_FOUND in ${APPLIED_ROLE[@]}; do
+        printf "%s\n" "$ROLE_FOUND"
+    done
+    
+    return $SUCCESS
+}
+
 function get_env
 {
     env
@@ -356,6 +367,8 @@ function help_role
         DESCRIBE ) printf "%s\n" "Outputs summary information regarding a role"
                    ;;
         LIST     ) printf "%s\n" "Outputs what roles are available"
+                   ;;
+        STATUS   ) printf "%s\n" "Outputs what roles are currently applied"
                    ;;
         HELP     ) usage
                    ;;
@@ -2549,7 +2562,7 @@ FUNC_SWITCHES=""
 
 # Check we have the right amount of parameters left
 if [[ $# -lt 2 ]]; then
-    if [[ $# -lt 1 || ( "$1" != "list" && "$1" != "reset" ) ]]; then
+    if [[ $# -lt 1 || ( "$1" != "list" && "$1" != "reset" && "$1" != "status" ) ]]; then
         usage >&2
         return $ERR_UNKNOWN_CMD
     fi
@@ -2566,6 +2579,7 @@ case "$MAIN_CMD" in
     reset              ) ;;
     describe           ) ;;
     list               ) ;;
+    status             ) ;;
     help               ) ;;
     -h | --help        ) usage
                          return $SUCCESS
@@ -2580,10 +2594,16 @@ esac
 ROLE_LIST=$( list_roles "${DOTFILES_ROLES_PATH}" )
 
 # Very lightweight functionality that doesnt need to know of current role state etc
-if [[ "$MAIN_CMD" == "list" ]]; then
-    printf "%s\n" "${ROLE_LIST}"
-    return $SUCCESS
-fi
+case "$MAIN_CMD" in
+
+    list   ) printf "%s\n" "${ROLE_LIST}"
+             return $SUCCESS
+             ;;
+    status ) print_status
+             return $SUCCESS
+             ;;
+             
+esac
 
 # Further commands interact directly with an already allocated role or a specific one that needs querying, reset is an exception as it has no arguments
 # however due to its implementation We call it like any other
