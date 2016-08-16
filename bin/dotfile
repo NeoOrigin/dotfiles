@@ -598,6 +598,7 @@ function request_role
         return 0
     fi
 
+    # if we're not forcing a request, check for scope instructions
     if [[ "${FORCE_HIDDEN}" != "true" ]]; then
     
         ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
@@ -608,10 +609,10 @@ function request_role
             
             case "$PRIVATE" in
             
-                public ) ;;
-                *      ) print_error "Role [%s] is marked private and cannot be requested" "$NEW_ROLE"
-                         return 1
-                         ;;
+                public    ) ;;
+                *         ) print_error "Role [%s] is marked private and cannot be requested" "$NEW_ROLE"
+                            return 1
+                            ;;
                          
             esac
             
