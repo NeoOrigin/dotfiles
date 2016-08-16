@@ -598,6 +598,27 @@ function request_role
         return 0
     fi
 
+    if [[ "${FORCE_HIDDEN}" != "true" ]]; then
+    
+        ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+        ROLE_META="$ROLE_PATH/meta"
+    
+        if [[ -f "$ROLE_META" ]]; then
+            PRIVATE=$(grep -i "^scope " "$ROLE_META" | cut -d" " -f2 | tr '[A-Z]' '[a-z]' )
+            
+            case "$PRIVATE" in
+            
+                public ) ;;
+                *      ) print_error "Role [%s] is marked private and cannot be requested" "$NEW_ROLE"
+                         return 1
+                         ;;
+                         
+            esac
+            
+        fi
+        
+    fi
+        
     # First step is to create links if configured and the role contains them
     # Second step is to inherit any common dependencies if configured and there is a dependencies file
     # last step is to inherit the environment if configured and there is an executable file
@@ -782,8 +803,8 @@ function setup_role_dependencies
     
     for DEP_ROLE in ${DEPS_LIST}; do
         ROLE_NAME=$(printf "%s\n" "${DEP_ROLE}" | cut -d, -f2)
-
-        # We could do this outside of hte loop but because we source other scripts they might do this also
+        
+        # We could do this outside of the loop but because we source other scripts they might do this also
         # safer to do this on every loop to ensure our variables look ok
         REVERSE_FUNC_SWITCHES=""
         [[ "$USE_ENV"     == "false" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-env"
@@ -796,7 +817,7 @@ function setup_role_dependencies
         [[ "$TRACE"       == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --trace"
             
         # NOTE: We do not add an option for use dependencies, it is assumed otherwise we would not have got this far in the function
-        . $DOTFILES_HOME/bin/dotfile ${REVERSE_FUNC_SWITCHES} request "${ROLE_NAME}"
+        . $DOTFILES_HOME/bin/dotfile --force ${REVERSE_FUNC_SWITCHES} request "${ROLE_NAME}"
         if [[ $? -ne 0 ]]; then
             print_error "Could not add dependency [%s] from role [%s]" "$ROLE_NAME" "$ROLE_PATH"
             return $ERR_CREATE_DEPENDENCY_FAILED
@@ -2388,6 +2409,7 @@ USE_SCRIPT="${DOTFILES_INCLUDE_SCRIPT:-true}"       # Do we include role environ
 
 DEBUG="${DOTFILES_DEBUG:-false}"                    # Debug messages to log output
 TRACE=false                                         # Trace is purely at a user level
+FORCE_HIDDEN=false                                     # Force requests for hidden roles
 
 HASTTY=true
 tty -s
@@ -2411,6 +2433,8 @@ while [[ $# -ne 0 ]]; do
         -P | --no-paths        ) shift; USE_PATHS=false
                                  ;;
         -S | --no-script       ) shift; USE_SCRIPT=false
+                                 ;;
+        -f | --force           ) FORCE_HIDDEN=true
                                  ;;
         -x | --debug           ) shift; DEBUG=true
                                  ;;
