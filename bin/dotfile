@@ -808,7 +808,7 @@ function setup_role_dependencies
 
     
     # Find our dependencies, should be of the format role <dependency>
-    DEPS_LIST=$(grep "^[rR][oO][lL][eE] " "$ROLE_DEPS" | sed 's/ /,/g')
+    DEPS_LIST=$(grep -i "^role " "$ROLE_DEPS" | sed 's/ /,/g')
     
     for DEP_ROLE in ${DEPS_LIST}; do
         ROLE_NAME=$(printf "%s\n" "${DEP_ROLE}" | cut -d, -f2)
@@ -1237,7 +1237,7 @@ function setup_role_files
         BASE_PATH=$(echo ~)
             
         FILES_LIST=""
-            [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^[fF][iI][lL][eE] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
+        [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^[fF][iI][lL][eE] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
         [[ -n "${FILES_LIST}" ]] && BASE_PATH="${FILES_LIST}"
             
         FILES_MANAGED=$(grep -v "^${SHORT_NAME_SAFE} " "${BASE_PATH}/.dotfile.managed")
@@ -1256,9 +1256,11 @@ function setup_role_files
         if ${FILE_EXISTS}; then
 
             CKSUM_METHOD=""
-                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_METHOD=$(grep -v "^[hH][aA][sS][hH] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3 | tr '[A-Z]' '[a-z]')
             CKSUM_VALUE=""
-                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_VALUE=$(grep -v "^[hH][aA][sS][hH] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f4-)
+            if [[ -f "$ROLE_PATH/meta" ]]; then
+                CKSUM_METHOD=$(grep -v "^[hH][aA][sS][hH] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3 | tr '[A-Z]' '[a-z]')
+                CKSUM_VALUE=$( grep -v "^[hH][aA][sS][hH] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f4-)
+            fi
                 
             case "${CKSUM_METHOD}" in
                 
@@ -1319,29 +1321,29 @@ function setup_role_files
             
             if [[ "${FILE_MATCHES}" == "true" ]]; then
                     
-                    # No point removing a file that matches what we expect
+                # No point removing a file that matches what we expect
+                RM_FILE=false
+                COPY_FILE=false
+                    
+                # If file is the same, and metadata is the same then no need to do anything
+                if [[ "$META_MATCHES" == "true" ]]; then
+                    
+                    RM_ENTRY=false
+                    ADD_ENTRY=false
+                        
+                fi
+                
+            else
+                
+                # File exists but not managed, dont touch it incase a developer put it there
+                if [[ "$META_MATCHES" == "false" ]]; then
+                    
                     RM_FILE=false
                     COPY_FILE=false
-                    
-                    # If file is the same, and metadata is the same then no need to do anything
-                    if [[ "$META_MATCHES" == "true" ]]; then
-                    
-                        RM_ENTRY=false
-                        ADD_ENTRY=false
+                    RM_ENTRY=false
+                    ADD_ENTRY=false
                         
-                    fi
-                
-                else
-                
-                    # File exists but not managed, dont touch it incase a developer put it there
-                    if [[ "$META_MATCHES" == "false" ]]; then
-                    
-                        RM_FILE=false
-                        COPY_FILE=false
-                        RM_ENTRY=false
-                        ADD_ENTRY=false
-                        
-                    fi
+                fi
                 
             fi
                 
@@ -1480,14 +1482,19 @@ function setup_role_links
             
         LINKS_LIST=""
         CHMOD_PERMS=""
+        CHOWN_USER=""
+        CHOWN_RECURSIVE=false
+        
         if [[ -f "$ROLE_PATH/meta" ]]; then
             
             # When building links you can chmod it as well, extract both information
-            OVERRIDES=$(grep -iE "^(chmod|link) ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta")
+            OVERRIDES=$(grep -iE "^(chmod|link|chown) ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta")
 
             CHMOD_PERMS=$(printf "%s\n" "${OVERRIDES}" | grep -i "^chmod " | head -1 | cut -d" " -f3)
             LINKS_LIST=$( printf "%s\n" "${OVERRIDES}" | grep -i "^link "  | head -1 | cut -d" " -f3)
-                
+            CHOWN_USER=$( printf "%s\n" "${OVERRIDES}" | grep -i "^chown " | head -1 | cut -d" " -f3)
+            CHOWN_RECURSIVE=$( printf "%s\n" "${OVERRIDES}" | grep -i "^chown " | head -1 | cut -d" " -f4)
+            
             [[ -n "${LINKS_LIST}" ]] && BASE_PATH="${LINKS_LIST}"
         fi
             
@@ -1540,6 +1547,27 @@ function setup_role_links
                     chmod "$CHMOD_PERMS" "${BASE_PATH}/${SHORT_NAME}"
                     if [[ $? -ne 0 ]]; then
                         print_error "Could not set permissions [%s] on symbolic links from role [%s]" "$CHMOD_PERMS" "${ROLE_PATH}"
+                        return $ERR_CREATE_LINK_FAILED
+                    fi
+                    
+                fi
+                
+            fi
+            
+            # If in the metadata the user also described ownership
+            if [[ -n "$CHOWN_USER" ]]; then
+            
+                # Get the current permissions and if they are not the same then change them
+                # NOTE we do not support logical u+w etc permissions, only octal
+                CURR_USER=$(find "${BASE_PATH}" -mindepth 1 -maxdepth 1 -name "${SHORT_NAME}" -printf "%u:%g\n")
+                if [[ -n "$CURR_USER" && "$CURR_USER" != "$CHOWN_USER" ]]; then
+                
+                    RECURSIVE=false
+                    [[ "$CHOWN_RECURSIVE" == "true" ]] && RECURSIVE="-R"
+                    
+                    chown ${RECURSIVE} "$CHOWN_USER" "${BASE_PATH}/${SHORT_NAME}"
+                    if [[ $? -ne 0 ]]; then
+                        print_error "Could not set ownsership [%s] on symbolic links from role [%s]" "$CHOWN_USER" "${ROLE_PATH}"
                         return $ERR_CREATE_LINK_FAILED
                     fi
                     
@@ -1810,63 +1838,62 @@ function teardown_role_environment
     ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_ENV="$ROLE_PATH/env"
 
-    if [[ -f "$ROLE_ENV" ]]; then
+    [[ ! -f "$ROLE_ENV" ]] && return $SUCCESS
 
-        # Need to remove the need for a while loop as this spawns a subshell in POSIX / bash so the exports arent exposed
-        #read_config "$ROLE_ENV" | while read -r action name value; do
+
+    # Need to remove the need for a while loop as this spawns a subshell in POSIX / bash so the exports arent exposed
+    #read_config "$ROLE_ENV" | while read -r action name value; do
         
-        PARAMS=$(grep -iE "^(set|prepend|append) " "$ROLE_ENV" | reverse_lines | cut -d" " -f2)
+    PARAMS=$(grep -iE "^(set|prepend|append) " "$ROLE_ENV" | reverse_lines | cut -d" " -f2)
         
-        for PARAM in ${PARAMS}; do
+    for PARAM in ${PARAMS}; do
         
-            PARAM_SAFE=$(escape_regex_extended "${PARAM}")
-            line=$(grep -iE "^(set|prepend|append) ${PARAM_SAFE} " "$ROLE_ENV")
-            action=$(printf "%s\n" "$line" | cut -d" " -f1 | tr '[A-Z]' '[a-z]')
-            name="$PARAM"
-            value=$(printf "%s\n" "$line" | cut -d" " -f3-)
-            new_value="$value"
+        PARAM_SAFE=$(escape_regex_extended "${PARAM}")
+        line=$(grep -iE "^(set|prepend|append) ${PARAM_SAFE} " "$ROLE_ENV")
+        action=$(printf "%s\n" "$line" | cut -d" " -f1 | tr '[A-Z]' '[a-z]')
+        name="$PARAM"
+        value=$(printf "%s\n" "$line" | cut -d" " -f3-)
+        new_value="$value"
             
-            case "$action" in
+        case "$action" in
             
-                set     ) new_value=""
+            set     ) new_value=""
                 
-                          unset "${name}"
-                          if [[ $? -ne 0 ]]; then
-                              print_error "Could not unset environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
-                              return $ERR_DELETE_ENV_FAILED
-                          fi
-                          ;;
-                prepend ) #eval export ${name}=${value}${name}
-                          value_interpreted=$(eval printf "%s" "${value}")
-                          new_value=$(env | grep "^${name}=" | sed "s|^${name}=||g" | sed "s|^${value_interpreted}||g")
+                      unset "${name}"
+                      if [[ $? -ne 0 ]]; then
+                          print_error "Could not unset environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
+                          return $ERR_DELETE_ENV_FAILED
+                      fi
+                      ;;
+            prepend ) #eval export ${name}=${value}${name}
+                      value_interpreted=$(eval printf "%s" "${value}")
+                      new_value=$(env | grep "^${name}=" | sed "s|^${name}=||g" | sed "s|^${value_interpreted}||g")
                           
-                          export ${name}="$new_value"
-                          if [[ $? -ne 0 ]]; then
-                              print_error "Could not pop environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
-                              return $ERR_DELETE_ENV_FAILED
-                          fi
-                          ;;
-                append  ) #eval export ${name}=${value}${name}
-                          value_interpreted=$(eval printf "%s" "${value}")
-                          new_value=$(env | grep "^${name}=" | sed "s|^${name}=||g" | sed "s|${value_interpreted}$||g")
+                      export ${name}="$new_value"
+                      if [[ $? -ne 0 ]]; then
+                          print_error "Could not pop environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
+                          return $ERR_DELETE_ENV_FAILED
+                      fi
+                      ;;
+            append  ) #eval export ${name}=${value}${name}
+                      value_interpreted=$(eval printf "%s" "${value}")
+                      new_value=$(env | grep "^${name}=" | sed "s|^${name}=||g" | sed "s|${value_interpreted}$||g")
                           
-                          export ${name}="$new_value"
-                          if [[ $? -ne 0 ]]; then
-                              print_error "Could not shift environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
-                              return $ERR_DELETE_ENV_FAILED
-                          fi
-                          ;;
+                      export ${name}="$new_value"
+                      if [[ $? -ne 0 ]]; then
+                          print_error "Could not shift environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
+                          return $ERR_DELETE_ENV_FAILED
+                      fi
+                      ;;
             
-            esac
+        esac
             
-            # Check if user wants all unset variables to be unset or remain as blank
-            if [[ "$DOTFILES_UNSET_EMPTY_VARIABLES" == "true" && -z "${new_value}" ]]; then
-                unset "${name}"
-            fi
+        # Check if user wants all unset variables to be unset or remain as blank
+        if [[ "$DOTFILES_UNSET_EMPTY_VARIABLES" == "true" && -z "${new_value}" ]]; then
+            unset "${name}"
+        fi
             
-        done
-
-    fi
+    done
     
     return $SUCCESS
 }
@@ -1925,16 +1952,15 @@ function teardown_role_script
     # Incase the base path is a directory then we assume there might be a main file/script
     [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
 
-    if [[ -f "$ROLE_MAIN" ]]; then
+    [[ ! -f "$ROLE_MAIN" ]] && return $SUCCESS
 
-        ${DEBUG} && log_it DEBUG CALL ". ${ROLE_MAIN} --teardown"
-        . "${ROLE_MAIN}" --teardown
 
-        if [[ $? -ne 0 ]]; then
-            print_error "Could not release role [%s]" "${ROLE_PATH}"
-            return 3
-        fi
+    ${DEBUG} && log_it DEBUG CALL ". ${ROLE_MAIN} --teardown"
+    . "${ROLE_MAIN}" --teardown
 
+    if [[ $? -ne 0 ]]; then
+        print_error "Could not release role [%s]" "${ROLE_PATH}"
+        return 3
     fi
     
     return $SUCCESS
@@ -1985,66 +2011,64 @@ function teardown_role_paths
         
     done
 
+    [[ "$USE_PATHS" == "false" ]] && return $SUCCESS
+    
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
     ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     ROLE_BIN="$ROLE_PATH/bin"
     ROLE_LIB="$ROLE_PATH/lib"
     ROLE_FUN="$ROLE_PATH/funcs"
-
-    if [[ "$USE_PATHS" == "true" ]]; then
     
-        DIRECTION_BIN=""
-        DIRECTION_LIB=""
-        DIRECTION_FUN=""
+    DIRECTION_BIN=""
+    DIRECTION_LIB=""
+    DIRECTION_FUN=""
 
-        if [[ -f "$ROLE_PATH/meta" ]]; then
+    if [[ -f "$ROLE_PATH/meta" ]]; then
 
-            DIRECTION_BIN=$(grep -i "^path-method bin (append|prepend|none)\$" "$ROLE_PATH/meta" | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
-            DIRECTION_LIB=$(grep -i "^path-method lib (append|prepend|none)\$" "$ROLE_PATH/meta" | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
-            DIRECTION_FUN=$(grep -i "^path-method funcs (append|prepend|none)\$" "$ROLE_PATH/meta" | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
-
-        fi
-
-        # BIN
-        case "${DIRECTION_BIN:-prepend}" in
-
-            prepend ) [[ -d "$ROLE_BIN" ]] && export PATH=$(printf "%s\n" "$PATH" | sed "s|^$ROLE_BIN:||g")
-                      ;;
-            append  ) [[ -d "$ROLE_BIN" ]] && export PATH=$(printf "%s\n" "$PATH" | sed "s|:?${ROLE_BIN}\$||g")
-                      ;;
-            none    ) ;;
-            *       ) return 65
-                      ;;
-
-        esac
-
-        # FPATH
-        case "${DIRECTION_FUN:-prepend}" in
-
-            prepend ) [[ -d "$ROLE_FUN" ]] && export FPATH=$(printf "%s\n" "$FPATH" | sed "s|^$ROLE_FUN:||g")
-                      ;;
-            append  ) [[ -d "$ROLE_FUN" ]] && export FPATH=$(printf "%s\n" "$FPATH" | sed "s|:?${ROLE_FUN}\$||g")
-                      ;;
-            none    ) ;;
-            *       ) return 65
-                      ;;
-
-        esac
-
-        # LD_LIBRARY_PATH
-        case "${DIRECTION_LIB:-prepend}" in
-
-            prepend ) [[ -d "$ROLE_LIB" ]] && export LD_LIBRARY_PATH=$(printf "%s\n" "$LD_LIBRARY_PATH" | sed "s|^$ROLE_LIB:||g")
-                      ;;
-            append  ) [[ -d "$ROLE_LIB" ]] && export LD_LIBRARY_PATH=$(printf "%s\n" "$LD_LIBRARY_PATH" | sed "s|:?${ROLE_LIB}\$||g")
-                      ;;
-            none    ) ;;
-            *       ) return 65
-                      ;;
-
-        esac
+        DIRECTION_BIN=$(grep -i "^path-method bin (append|prepend|none)\$" "$ROLE_PATH/meta" | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
+        DIRECTION_LIB=$(grep -i "^path-method lib (append|prepend|none)\$" "$ROLE_PATH/meta" | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
+        DIRECTION_FUN=$(grep -i "^path-method funcs (append|prepend|none)\$" "$ROLE_PATH/meta" | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
 
     fi
+
+    # BIN
+    case "${DIRECTION_BIN:-prepend}" in
+
+        prepend ) [[ -d "$ROLE_BIN" ]] && export PATH=$(printf "%s\n" "$PATH" | sed "s|^$ROLE_BIN:||g")
+                  ;;
+        append  ) [[ -d "$ROLE_BIN" ]] && export PATH=$(printf "%s\n" "$PATH" | sed "s|:?${ROLE_BIN}\$||g")
+                  ;;
+        none    ) ;;
+        *       ) return 65
+                  ;;
+
+    esac
+
+    # FPATH
+    case "${DIRECTION_FUN:-prepend}" in
+
+        prepend ) [[ -d "$ROLE_FUN" ]] && export FPATH=$(printf "%s\n" "$FPATH" | sed "s|^$ROLE_FUN:||g")
+                  ;;
+        append  ) [[ -d "$ROLE_FUN" ]] && export FPATH=$(printf "%s\n" "$FPATH" | sed "s|:?${ROLE_FUN}\$||g")
+                  ;;
+        none    ) ;;
+        *       ) return 65
+                  ;;
+
+    esac
+
+    # LD_LIBRARY_PATH
+    case "${DIRECTION_LIB:-prepend}" in
+
+        prepend ) [[ -d "$ROLE_LIB" ]] && export LD_LIBRARY_PATH=$(printf "%s\n" "$LD_LIBRARY_PATH" | sed "s|^$ROLE_LIB:||g")
+                  ;;
+        append  ) [[ -d "$ROLE_LIB" ]] && export LD_LIBRARY_PATH=$(printf "%s\n" "$LD_LIBRARY_PATH" | sed "s|:?${ROLE_LIB}\$||g")
+                  ;;
+        none    ) ;;
+        *       ) return 65
+                  ;;
+
+    esac
     
     return $SUCCESS
 }
@@ -2104,184 +2128,186 @@ function teardown_role_files
     ROLE_FILE="$ROLE_PATH/files"
     
     # First step is to create links if configured and the role contains them
-    if [[ -d "${ROLE_FILE}" ]]; then
+    [[ ! -d "${ROLE_FILE}" ]] && return $SUCCESS
     
-        TARGETS=$(find "$ROLE_FILE" -maxdepth 1 -mindepth 1 2>/dev/null | reverse_lines)
+    # Get all children files
+    TARGETS=$(find "$ROLE_FILE" -maxdepth 1 -mindepth 1 2>/dev/null | reverse_lines)
         
-        # Go through all the files/folders found in the links folder as we need to point to them as symbolic
-        # links in the users home directory
-        for name in ${TARGETS}; do
+    # Go through all the files/folders found in the links folder as we need to point to them as symbolic
+    # links in the users home directory
+    for name in ${TARGETS}; do
         
-            SHORT_NAME=$(basename "${name}")
+        SHORT_NAME=$(basename "${name}")
             
-            BASE_PATH=$(echo ~)
+        BASE_PATH=$(echo ~)
             
-            FILES_LIST=""
-            [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^[fF][iI][lL][eE] ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
-            [[ -n "${FILES_LIST}" ]] && BASE_PATH="${FILES_LIST}"
+        FILES_LIST=""
+        [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^[fF][iI][lL][eE] ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
+        [[ -n "${FILES_LIST}" ]] && BASE_PATH="${FILES_LIST}"
             
-            FILES_MANAGED=$(grep -v "^${SHORT_NAME} " "${BASE_PATH}/.dotfile.managed")
-            ACTUAL_VALUE="-"
+        FILES_MANAGED=$(grep -v "^${SHORT_NAME} " "${BASE_PATH}/.dotfile.managed")
+        ACTUAL_VALUE="-"
             
-            # Determines whether we need to copy the file (ie we dont copy a file if it already exists)
-            FILE_EXISTS=false
-            IS_MANAGED=false
-            FILE_MATCHES=false
-            META_MATCHES=false
+        # Determines whether we need to copy the file (ie we dont copy a file if it already exists)
+        FILE_EXISTS=false
+        IS_MANAGED=false
+        FILE_MATCHES=false
+        META_MATCHES=false
             
-            [[ -f "${BASE_PATH}/${SHORT_NAME}" ]] && FILE_EXISTS=true
-            [[ -n "${FILES_MANAGED}" ]] && IS_MANAGED=true
+        [[ -f "${BASE_PATH}/${SHORT_NAME}" ]] && FILE_EXISTS=true
+        [[ -n "${FILES_MANAGED}" ]] && IS_MANAGED=true
             
-            # If we appear to have a copy of the file already we check the contents if we can
-            if ${FILE_EXISTS}; then
+        # If we appear to have a copy of the file already we check the contents if we can
+        if ${FILE_EXISTS}; then
 
-                CKSUM_METHOD=""
-                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_METHOD=$(grep -v "^[hH][aA][sS][hH] ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3 | tr '[A-Z]' '[a-z]' )
-                CKSUM_VALUE=""
-                [[ -f "$ROLE_PATH/meta" ]] && CKSUM_VALUE=$(grep -v "^[hH][aA][sS][hH] ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f4-)
-                
-                case "${CKSUM_METHOD}" in
-                
-                    sha1sum   ) ACTUAL_VALUE=$(sha1sum   "${BASE_PATH}/${SHORT_NAME}" 2>/dev/null | cut -d" " -f1) 
-                                ;;
-                    sha224sum ) ACTUAL_VALUE=$(sha224sum "${BASE_PATH}/${SHORT_NAME}" 2>/dev/null | cut -d" " -f1) 
-                                ;;
-                    sha256sum ) ACTUAL_VALUE=$(sha256sum "${BASE_PATH}/${SHORT_NAME}" 2>/dev/null | cut -d" " -f1) 
-                                ;;
-                    sha384sum ) ACTUAL_VALUE=$(sha384sum "${BASE_PATH}/${SHORT_NAME}" 2>/dev/null | cut -d" " -f1) 
-                                ;;
-                    sha512sum ) ACTUAL_VALUE=$(sha512sum "${BASE_PATH}/${SHORT_NAME}" 2>/dev/null | cut -d" " -f1) 
-                                ;;
-                    md5sum    ) ACTUAL_VALUE=$(md5sum    "${BASE_PATH}/${SHORT_NAME}" 2>/dev/null | cut -d" " -f1) 
-                                ;;
-                    force     ) ACTUAL_VALUE="force"
-                                ;;
-                    skip      ) ACTUAL_VALUE="skip"
-                                ;;
-                
-                esac
-                
-                COMPARE_RESULT=1
-                
-                if [[ "$ACTUAL_VALUE" == "force" ]]; then
-                    COMPARE_RESULT=1
-                elif [[ "$ACTUAL_VALUE" == "skip" ]]; then
-                    COMPARE_RESULT=0
-                elif [[ -z "${ACTUAL_VALUE}" || "${ACTUAL_VALUE}" == "-" ]]; then 
-                    cmp "${BASE_PATH}/${SHORT_NAME}" "${name}" 2>/dev/null
-                    COMPARE_RESULT=$?
-                elif [[ "CKSUM_VALUE" == "$ACTUAL_VALUE"  ]]; then
-                    COMPARE_RESULT=0
-                fi
-                
-                # Perform quick check, nopoint rebuilding link if its going to be the same
-                # Also prevents danger that an already running processes requires the presence if this link
-                # you dont want it dissappearing even for a millisecond just because you logged in
-                [[ $COMPARE_RESULT -eq 0 ]] && FILE_MATCHES=true
-                
-                if [[ "$IS_MANAGED" == "true" ]]; then
-                    MANAGED_CKSUM=$(printf "%s\n" "${FILES_MANAGED}" | cut -d" " -f2)
-                    
-                    [[ "$MANAGED_CKSUM" == "$ACTUAL_VALUE" ]] && META_MATCHES=true
-                fi
-
+            # Get the cksum for comparison if user requests it
+            CKSUM_METHOD=""
+            CKSUM_VALUE=""
+            if [[ -f "$ROLE_PATH/meta" ]]; then
+                CKSUM_METHOD=$(grep -v "^[hH][aA][sS][hH] ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3 | tr '[A-Z]' '[a-z]' )
+                CKSUM_VALUE=$( grep -v "^[hH][aA][sS][hH] ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f4-)
             fi
-            
-            RM_FILE=true
-            RM_ENTRY=true
-            
-            # Generally if the file exists it really doesnt matter, we create from scratch (cant delete if doesnt exist though)
-            if [[ "${FILE_EXISTS}" == "false" ]]; then
-                RM_FILE=false
-            else
-            
-                if [[ "${FILE_MATCHES}" == "true" ]]; then
+                
+            case "${CKSUM_METHOD}" in
+                
+                sha1sum   ) ACTUAL_VALUE=$(sha1sum   "${BASE_PATH}/${SHORT_NAME}" 2>/dev/null | cut -d" " -f1) 
+                            ;;
+                sha224sum ) ACTUAL_VALUE=$(sha224sum "${BASE_PATH}/${SHORT_NAME}" 2>/dev/null | cut -d" " -f1) 
+                            ;;
+                sha256sum ) ACTUAL_VALUE=$(sha256sum "${BASE_PATH}/${SHORT_NAME}" 2>/dev/null | cut -d" " -f1) 
+                            ;;
+                sha384sum ) ACTUAL_VALUE=$(sha384sum "${BASE_PATH}/${SHORT_NAME}" 2>/dev/null | cut -d" " -f1) 
+                            ;;
+                sha512sum ) ACTUAL_VALUE=$(sha512sum "${BASE_PATH}/${SHORT_NAME}" 2>/dev/null | cut -d" " -f1) 
+                            ;;
+                md5sum    ) ACTUAL_VALUE=$(md5sum    "${BASE_PATH}/${SHORT_NAME}" 2>/dev/null | cut -d" " -f1) 
+                            ;;
+                force     ) ACTUAL_VALUE="force"
+                            ;;
+                skip      ) ACTUAL_VALUE="skip"
+                            ;;
+                
+            esac
+                
+            COMPARE_RESULT=1
+                
+            if [[ "$ACTUAL_VALUE" == "force" ]]; then
+                COMPARE_RESULT=1
+            elif [[ "$ACTUAL_VALUE" == "skip" ]]; then
+                COMPARE_RESULT=0
+            elif [[ -z "${ACTUAL_VALUE}" || "${ACTUAL_VALUE}" == "-" ]]; then 
+                cmp "${BASE_PATH}/${SHORT_NAME}" "${name}" 2>/dev/null
+                COMPARE_RESULT=$?
+            elif [[ "CKSUM_VALUE" == "$ACTUAL_VALUE"  ]]; then
+                COMPARE_RESULT=0
+            fi
+                
+            # Perform quick check, nopoint rebuilding link if its going to be the same
+            # Also prevents danger that an already running processes requires the presence if this link
+            # you dont want it dissappearing even for a millisecond just because you logged in
+            [[ $COMPARE_RESULT -eq 0 ]] && FILE_MATCHES=true
+                
+            if [[ "$IS_MANAGED" == "true" ]]; then
+                MANAGED_CKSUM=$(printf "%s\n" "${FILES_MANAGED}" | cut -d" " -f2)
                     
-                    # No point removing a file that matches what we expect
+                [[ "$MANAGED_CKSUM" == "$ACTUAL_VALUE" ]] && META_MATCHES=true
+            fi
+
+        fi
+            
+        RM_FILE=true
+        RM_ENTRY=true
+            
+        # Generally if the file exists it really doesnt matter, we create from scratch (cant delete if doesnt exist though)
+        if [[ "${FILE_EXISTS}" == "false" ]]; then
+            RM_FILE=false
+        else
+            
+            if [[ "${FILE_MATCHES}" == "true" ]]; then
+                    
+                # No point removing a file that matches what we expect
+                RM_FILE=false
+                COPY_FILE=false
+                    
+                # If file is the same, and metadata is the same then no need to do anything
+                if [[ "$META_MATCHES" == "true" ]]; then
+                    
+                    RM_ENTRY=false
+                    ADD_ENTRY=false
+                        
+                fi
+                
+            else
+                
+                # File exists but not managed, dont touch it incase a developer put it there
+                if [[ "$META_MATCHES" == "false" ]]; then
+                    
                     RM_FILE=false
                     COPY_FILE=false
-                    
-                    # If file is the same, and metadata is the same then no need to do anything
-                    if [[ "$META_MATCHES" == "true" ]]; then
-                    
-                        RM_ENTRY=false
-                        ADD_ENTRY=false
+                    RM_ENTRY=false
+                    ADD_ENTRY=false
                         
-                    fi
+                fi
                 
-                else
+            fi
                 
-                    # File exists but not managed, dont touch it incase a developer put it there
-                    if [[ "$META_MATCHES" == "false" ]]; then
+        fi
                     
-                        RM_FILE=false
-                        COPY_FILE=false
-                        RM_ENTRY=false
-                        ADD_ENTRY=false
-                        
-                    fi
+        if [[ "${RM_ENTRY}" == "true" ]]; then
                 
-                fi
-                
+            # Remove the link, ready to rebuild
+            ${DEBUG} && log_it DEBUG CLEANUP "grep -v '^${SHORT_NAME} ' '${BASE_PATH}/.dotfile.managed' > '${BASE_PATH}/.dotfile.managed2'"
+            grep -v "^${SHORT_NAME} " "${BASE_PATH}/.dotfile.managed" > "${BASE_PATH}/.dotfile.managed2"
+            if [[ $? -ne 0 ]]; then
+                print_error "Could not add remove file from role [%s]" "${ROLE_PATH}"
+                return 4
             fi
-                    
-            if [[ "${RM_ENTRY}" == "true" ]]; then
                 
-                # Remove the link, ready to rebuild
-                ${DEBUG} && log_it DEBUG CLEANUP "grep -v '^${SHORT_NAME} ' '${BASE_PATH}/.dotfile.managed' > '${BASE_PATH}/.dotfile.managed2'"
-                grep -v "^${SHORT_NAME} " "${BASE_PATH}/.dotfile.managed" > "${BASE_PATH}/.dotfile.managed2"
-                if [[ $? -ne 0 ]]; then
-                    print_error "Could not add remove file from role [%s]" "${ROLE_PATH}"
-                    return 4
-                fi
-                
-                ${DEBUG} && log_it DEBUG CLEANUP "mv '${BASE_PATH}/.dotfile.managed2' '${BASE_PATH}/.dotfile.managed'"
-                mv "${BASE_PATH}/.dotfile.managed2" "${BASE_PATH}/.dotfile.managed"
-                if [[ $? -ne 0 ]]; then
-                    print_error "Could not add file from role [%s]" "${ROLE_PATH}"
-                    return 4
-                fi
-                
+            ${DEBUG} && log_it DEBUG CLEANUP "mv '${BASE_PATH}/.dotfile.managed2' '${BASE_PATH}/.dotfile.managed'"
+            mv "${BASE_PATH}/.dotfile.managed2" "${BASE_PATH}/.dotfile.managed"
+            if [[ $? -ne 0 ]]; then
+                print_error "Could not add file from role [%s]" "${ROLE_PATH}"
+                return 4
             fi
+                
+        fi
             
-            if [[ "${RM_FILE}" == "true" ]]; then
+        if [[ "${RM_FILE}" == "true" ]]; then
                 
-                # Remove the link, ready to rebuild
-                ${DEBUG} && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
-                rm -f "${BASE_PATH}/${SHORT_NAME}"
-                if [[ $? -ne 0 ]]; then
-                    print_error "Could not remove file from role [%s]" "${ROLE_PATH}"
-                    return 4
-                fi
-                
+            # Remove the link, ready to rebuild
+            ${DEBUG} && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
+            rm -f "${BASE_PATH}/${SHORT_NAME}"
+            if [[ $? -ne 0 ]]; then
+                print_error "Could not remove file from role [%s]" "${ROLE_PATH}"
+                return 4
             fi
+                
+        fi
             
-            if [[ "${ADD_ENTRY}" == "true" ]]; then
+        if [[ "${ADD_ENTRY}" == "true" ]]; then
                 
-                # Record that we are now managing this file
-                ${DEBUG} && log_it DEBUG COPYING "printf '%s %s %s\n' '${SHORT_NAME}' '${ACTUAL_VALUE}' '${name}' >> '${BASE_PATH}/.dotfile.managed'"
-                printf "%s %s %s\n" "${SHORT_NAME}" "${ACTUAL_VALUE}" "${name}" >> "${BASE_PATH}/.dotfile.managed"
-                if [[ $? -ne 0 ]]; then
-                    print_error "Could not add metadata to [%s] to manage file copy from role [%s]" "${BASE_PATH}/${SHORT_NAME}" "${ROLE_PATH}"
-                    return 5
-                fi
-                
+            # Record that we are now managing this file
+            ${DEBUG} && log_it DEBUG COPYING "printf '%s %s %s\n' '${SHORT_NAME}' '${ACTUAL_VALUE}' '${name}' >> '${BASE_PATH}/.dotfile.managed'"
+            printf "%s %s %s\n" "${SHORT_NAME}" "${ACTUAL_VALUE}" "${name}" >> "${BASE_PATH}/.dotfile.managed"
+            if [[ $? -ne 0 ]]; then
+                print_error "Could not add metadata to [%s] to manage file copy from role [%s]" "${BASE_PATH}/${SHORT_NAME}" "${ROLE_PATH}"
+                return 5
             fi
-            
-            if [[ "${COPY_FILE}" == "true" ]]; then
-            
-                ${DEBUG} && log_it DEBUG COPYING "cp --recursive --archive '${name}' '${BASE_PATH}/${SHORT_NAME}'"
-                cp --recursive --archive "${name}" "${BASE_PATH}/${SHORT_NAME}"
-                if [[ $? -ne 0 ]]; then
-                    print_error "Could not add file from role [%s]" "${ROLE_PATH}"
-                    return 5
-                fi
                 
-            fi
+        fi
             
-        done
-        
-    fi
+        if [[ "${COPY_FILE}" == "true" ]]; then
+            
+            ${DEBUG} && log_it DEBUG COPYING "cp --recursive --archive '${name}' '${BASE_PATH}/${SHORT_NAME}'"
+            cp --recursive --archive "${name}" "${BASE_PATH}/${SHORT_NAME}"
+            if [[ $? -ne 0 ]]; then
+                print_error "Could not add file from role [%s]" "${ROLE_PATH}"
+                return 5
+            fi
+                
+        fi
+            
+    done
     
     return $SUCCESS
 }
@@ -2337,40 +2363,39 @@ function teardown_role_links
     ROLE_LINK="$ROLE_PATH/links"
     
     # First step is to create links if configured and the role contains them
-    if [[ -d "${ROLE_LINK}" ]]; then
+    [[ ! -d "${ROLE_LINK}" ]] && return $SUCCESS
     
-        # Look at direct children
-        TARGETS=$(find "$ROLE_LINK" -maxdepth 1 -mindepth 1 2>/dev/null | reverse_lines)
+    
+    # Look at direct children
+    TARGETS=$(find "$ROLE_LINK" -maxdepth 1 -mindepth 1 2>/dev/null | reverse_lines)
         
-        # Go through all the files/folders found in the links folder as we need to point to them as symbolic
-        # links in the users home directory
-        for name in ${TARGETS}; do
+    # Go through all the files/folders found in the links folder as we need to point to them as symbolic
+    # links in the users home directory
+    for name in ${TARGETS}; do
         
-            SHORT_NAME=$(basename "${name}")
-            SHORT_NAME_SAFE=$(escape_regex "${SHORT_NAME}")
+        SHORT_NAME=$(basename "${name}")
+        SHORT_NAME_SAFE=$(escape_regex "${SHORT_NAME}")
 
-            BASE_PATH=$(echo ~)
-            LINKS_LIST=""
+        BASE_PATH=$(echo ~)
+        LINKS_LIST=""
             
-            # Check if there is a role configuration file redirecting this link
-            [[ -f "$ROLE_PATH/meta" ]] && LINKS_LIST=$(grep -v "^[lL][iI][nN][kK] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
-            [[ -n "${LINKS_LIST}" ]] && BASE_PATH="${LINKS_LIST}"
+        # Check if there is a role configuration file redirecting this link
+        [[ -f "$ROLE_PATH/meta" ]] && LINKS_LIST=$(grep -v "^[lL][iI][nN][kK] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
+        [[ -n "${LINKS_LIST}"   ]] && BASE_PATH="${LINKS_LIST}"
             
-            # Check if link already exists, if so, remove it
-            if [[ -L "${BASE_PATH}/${SHORT_NAME}" ]]; then
+        # Check if link already exists, if so, remove it
+        if [[ -L "${BASE_PATH}/${SHORT_NAME}" ]]; then
 
-                "${DEBUG}" && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
-                rm -f "${BASE_PATH}/${SHORT_NAME}"
-                if [[ $? -ne 0 ]]; then
-                    print_error "Could not reset symbolic links from role [%s]" "${ROLE_PATH}"
-                    return 4
-                fi
-
+            "${DEBUG}" && log_it DEBUG CLEANUP "rm -f '${BASE_PATH}/${SHORT_NAME}'"
+            rm -f "${BASE_PATH}/${SHORT_NAME}"
+            if [[ $? -ne 0 ]]; then
+                print_error "Could not reset symbolic links from role [%s]" "${ROLE_PATH}"
+                return 4
             fi
+
+        fi
             
-        done
-        
-    fi
+    done
     
     return $SUCCESS
 }
