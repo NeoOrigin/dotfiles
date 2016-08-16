@@ -146,11 +146,11 @@ function print_error
 function print_status
 {
     APPLIED_ROLE=($(get_env | grep "^DOTFILES_ADD_ROLE__" | cut -d"_" -f5- | unnormalize_role | sed 's/=/ /g' | sort -k2,2 -nr))
-    
+
     for ROLE_FOUND in ${APPLIED_ROLE[@]}; do
         printf "%s\n" "$ROLE_FOUND"
     done
-    
+
     return $SUCCESS
 }
 
@@ -962,16 +962,20 @@ function setup_role_environment
     #read_config "$ROLE_ENV" | while read -r action name value; do
     
     # Format of the env variable file is (set|prepend|append) <name> <value>
-    PARAMS=$(grep -iE "^(set|prepend|append) " "$ROLE_ENV" | cut -d" " -f2)
-        
+    LINES=$(grep -iE "^(set|prepend|append) " "$ROLE_ENV")
+    PARAMS=$(printf "%s\n" "$LINES" | cut -d" " -f2)
+    
+    i=0
     for PARAM in ${PARAMS}; do
+        
+        i=$(( i + 1 ))
         
         # Escape for egrep
         PARAM_SAFE=$(escape_regex_extended "$PARAM")
         
         # Extract the exact line
         name="$PARAM"
-        line=$(grep -iE "^(set|prepend|append) ${PARAM_SAFE} " "$ROLE_ENV")
+        line=$(printf "%s\n" "$LINES" | head -${i} | tail -1)
         action=$( printf "%s\n" "$line" | cut -d" " -f1  | tr '[A-Z]' '[a-z]' )
         value=$(  printf "%s\n" "$line" | cut -d" " -f3- )
 
@@ -983,13 +987,13 @@ function setup_role_environment
                           return $ERR_CREATE_ENV_FAILED
                       fi
                       ;;
-            prepend ) eval export "${name}"="${value}\$${name}"
+            prepend ) eval export "${name}"="${value}:\$${name}"
                       if [[ $? -ne 0 ]]; then
                           print_error "Could not prepend environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
                           return $ERR_CREATE_ENV_FAILED
                       fi
                       ;;
-            append  ) eval export "${name}"="\$${name}${value}"
+            append  ) eval export "${name}"="\$${name}:${value}"
                       if [[ $? -ne 0 ]]; then
                           print_error "Could not append environment variable [%s] from role [%s]" "${name}" "${ROLE_PATH}"
                           return $ERR_CREATE_ENV_FAILED
@@ -1856,16 +1860,22 @@ function teardown_role_environment
 
     # Need to remove the need for a while loop as this spawns a subshell in POSIX / bash so the exports arent exposed
     #read_config "$ROLE_ENV" | while read -r action name value; do
-        
-    PARAMS=$(grep -iE "^(set|prepend|append) " "$ROLE_ENV" | reverse_lines | cut -d" " -f2)
-        
+    LINES=$(grep -iE "^(set|prepend|append) " "$ROLE_ENV")
+    PARAMS=$(printf "%s\n" "$LINES" | cut -d" " -f2)
+    
+    i=0
     for PARAM in ${PARAMS}; do
         
-        PARAM_SAFE=$(escape_regex_extended "${PARAM}")
-        line=$(grep -iE "^(set|prepend|append) ${PARAM_SAFE} " "$ROLE_ENV")
-        action=$(printf "%s\n" "$line" | cut -d" " -f1 | tr '[A-Z]' '[a-z]')
+        i=$(( i + 1 ))
+        
+        # Escape for egrep
+        PARAM_SAFE=$(escape_regex_extended "$PARAM")
+        
+        # Extract the exact line
         name="$PARAM"
-        value=$(printf "%s\n" "$line" | cut -d" " -f3-)
+        line=$(printf "%s\n" "$LINES" | head -${i} | tail -1)
+        action=$( printf "%s\n" "$line" | cut -d" " -f1  | tr '[A-Z]' '[a-z]' )
+        value=$(  printf "%s\n" "$line" | cut -d" " -f3- )
         new_value="$value"
             
         case "$action" in
@@ -2597,12 +2607,12 @@ ROLE_LIST=$( list_roles "${DOTFILES_ROLES_PATH}" )
 case "$MAIN_CMD" in
 
     list   ) printf "%s\n" "${ROLE_LIST}"
-             return $SUCCESS
+    return $SUCCESS
              ;;
     status ) print_status
              return $SUCCESS
              ;;
-             
+
 esac
 
 # Further commands interact directly with an already allocated role or a specific one that needs querying, reset is an exception as it has no arguments
