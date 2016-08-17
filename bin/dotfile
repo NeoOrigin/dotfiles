@@ -146,10 +146,13 @@ function print_error
 
 function print_status
 {
-    APPLIED_ROLE=($(get_env | grep "^DOTFILES_ADD_ROLE__" | cut -d"_" -f5- | unnormalize_role | sed 's/=/ /g' | sort -k2,2 -nr))
+    get_env | grep "^DOTFILES_ADD_ROLE__"
+    echo "%%%%%"
+    APPLIED_ROLE=($(get_env | grep "^DOTFILES_ADD_ROLE__" | cut -d"_" -f5- | unnormalize_role | sed 's/=/ /g' | sort -k2,2 -nr | sed 's/ /,/g' ))
 
     for ROLE_FOUND in ${APPLIED_ROLE[@]}; do
-        printf "%s\n" "$ROLE_FOUND"
+        ROLE_NAME=$(printf "%s\n" "$ROLE_FOUND" | cut -d, -f1)
+        printf "%s\n" "$ROLE_NAME"
     done
 
     return $SUCCESS
@@ -831,13 +834,13 @@ function setup_role_dependencies
         
         done
             
-        #NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
+        NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
             
         ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
-        #ROLE_MAIN="$ROLE_PATH"
-        #ROLE_LINK="${ROLE_PATH}/links"
-        #ROLE_DEPS="${ROLE_PATH}/dependencies"
-        #[[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
+        ROLE_MAIN="$ROLE_PATH"
+        ROLE_LINK="${ROLE_PATH}/links"
+        ROLE_DEPS="${ROLE_PATH}/dependencies"
+        [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
             
     done
     
@@ -1744,13 +1747,13 @@ function teardown_role_dependencies
         
         done
     
-        #NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
+        NEW_ROLE_UPPER=$(printf "%s\n" "${NEW_ROLE}" | normalize_role)
             
         ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
-        #ROLE_MAIN="$ROLE_PATH"
-        #ROLE_LINK="${ROLE_PATH}/links"
-        #ROLE_DEPS="${ROLE_PATH}/dependencies"
-        #[[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
+        ROLE_MAIN="$ROLE_PATH"
+        ROLE_LINK="${ROLE_PATH}/links"
+        ROLE_DEPS="${ROLE_PATH}/dependencies"
+        [[ -d "${ROLE_PATH}" ]] && ROLE_MAIN="${ROLE_PATH}/main"
             
     done
     
@@ -2340,10 +2343,18 @@ function teardown_role_templates
     ROLE_TEMPLATES="$ROLE_PATH/templates"
     
     [[ ! -d "$ROLE_TEMPLATES" ]] && return $SUCCESS
+    
+    
+    return $SUCCESS
 }
 
 
 #-- Includes -------------------------------------------------------------------------------------------------------
+
+([[ -n $ZSH_EVAL_CONTEXT && $ZSH_EVAL_CONTEXT =~ :file$ ]] || 
+ [[ -n $KSH_VERSION && $(cd "$(dirname -- "$0")" &&
+    printf '%s' "${PWD%/}/")$(basename -- "$0") != "${.sh.file}" ]] || 
+ [[ -n $BASH_VERSION && $0 != "$BASH_SOURCE" ]]) && leave=return || leave=exit
 
 # Default to current directory if environment not set
 if [[ -z "$DOTFILES_HOME" ]]; then
@@ -2358,11 +2369,11 @@ then
         if [[ $? -ne 0 ]]
         then
             print_error "Could not source '%s'.  This is defined in the environment variable %s.  Exiting" "$DOTFILES_CONFIG" DOTFILES_CONFIG
-            return $ERR_FAILED_LOADING_CONFIG
+            ${leave} $ERR_FAILED_LOADING_CONFIG
         fi
     else
         print_error "Could not source '%s'.  This is defined in the environment variable %s but does not exist.  Exiting" "$DOTFILES_CONFIG" DOTFILES_CONFIG
-        return $ERR_FAILED_LOADING_CONFIG
+        ${leave} $ERR_FAILED_LOADING_CONFIG
     fi
 fi
 
@@ -2373,7 +2384,7 @@ then
     if [[ $? -ne 0 ]]
     then
         print_error "Could not source '%s'.  Exiting" "~/.dotfiles.cfg"
-        return $ERR_FAILED_LOADING_CONFIG
+        ${leave} $ERR_FAILED_LOADING_CONFIG
     fi
 fi
 
@@ -2383,7 +2394,7 @@ then
     if [[ $? -ne 0 ]]
     then
         print_error "Could not source '%s'.  Exiting" "${DOTFILES_HOME}/etc/dotfiles.cfg"
-        return $ERR_FAILED_LOADING_CONFIG
+        ${leave} $ERR_FAILED_LOADING_CONFIG
     fi
 fi
 
@@ -2393,7 +2404,7 @@ then
     if [[ $? -ne 0 ]]
     then
         print_error "Could not source '%s'.  Exiting" "${DOTFILES_ADMIN_CONFIG}"
-        return $ERR_FAILED_LOADING_CONFIG
+        ${leave} $ERR_FAILED_LOADING_CONFIG
     fi
 fi
 
@@ -2408,19 +2419,19 @@ fi
 # Check if the log is writeable
 if [[ ! -r "$DOTFILES_LOG" ]]; then
     print_error "The value of %s [%s] is not readable.  Exiting" DOTFILES_LOG "$DOTFILES_LOG"
-    return $ERR_INVALID_LOG_PATH
+    ${leave} $ERR_INVALID_LOG_PATH
 fi
 
 # Check if the log is writeable
 if [[ ! -w "$DOTFILES_LOG" ]]; then
     print_error "The value of %s [%s] is not writeable.  Exiting" DOTFILES_LOG "$DOTFILES_LOG"
-    return $ERR_INVALID_LOG_PATH
+    ${leave} $ERR_INVALID_LOG_PATH
 fi
 
 log_it INFO PARAMS "dotfile $@"
 if [[ $? -ne 0 ]]; then
     print_error "Could not write to %s [%s] is not a valid file.  Exiting" DOTFILES_LOG "$DOTFILES_LOG"
-    return $ERR_INVALID_LOG_PATH
+    ${leave} $ERR_INVALID_LOG_PATH
 fi
 
 
@@ -2472,7 +2483,7 @@ while [[ $# -ne 0 ]]; do
                                  set -xv
                                  ;;
         -h | --help            ) usage
-                                 return $SUCCESS
+                                 ${leave} $SUCCESS
                                  ;;
         *                      ) break
                                  ;;
@@ -2497,7 +2508,7 @@ if [[ "$USE_TEMPLATES" == "true" ]]; then USE_TEMPLATES="--templates"; else USE_
 if [[ $# -lt 2 ]]; then
     if [[ $# -lt 1 || ( "$1" != "list" && "$1" != "reset" && "$1" != "status" ) ]]; then
         usage >&2
-        return $ERR_UNKNOWN_CMD
+        ${leave} $ERR_UNKNOWN_CMD
     fi
 fi
 
@@ -2515,10 +2526,10 @@ case "$MAIN_CMD" in
     status             ) ;;
     help               ) ;;
     -h | --help        ) usage
-                         return $SUCCESS
+                         ${leave} $SUCCESS
                          ;;
     *                  ) usage >&2
-                         return $ERR_UNKNOWN_CMD
+                         ${leave} $ERR_UNKNOWN_CMD
                          ;;
 
 esac
@@ -2530,10 +2541,10 @@ ROLE_LIST=$( list_roles "${DOTFILES_ROLES_PATH}" )
 case "$MAIN_CMD" in
 
     list   ) printf "%s\n" "${ROLE_LIST}"
-             return $SUCCESS
+             ${leave} $SUCCESS
              ;;
     status ) print_status
-             return $SUCCESS
+             ${leave} $SUCCESS
              ;;
 
 esac
@@ -2548,10 +2559,10 @@ NEW_ROLE_ACTION=$( printf "%s\n" "$1" | cut -d":" -f2)
 case "$MAIN_CMD" in
 
     describe           ) describe_role "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}
-                         return $?
+                         ${leave} $?
                          ;;
     help               ) help_role "$NEW_ROLE"
-                         return $?
+                         ${leave} $?
                          ;;
     
 esac
@@ -2580,4 +2591,4 @@ esac
 # Remove if becomes unnecessary
 [[ "${DOTFILES_ALLOCATION_INDEX}" -le 0 ]] && unset DOTFILES_ALLOCATION_INDEX
 
-return $RC
+${leave} $RC
