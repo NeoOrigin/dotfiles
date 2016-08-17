@@ -1,4 +1,4 @@
-#!/bin/ksh
+#!/bin/sh
 #####################################################################################################################
 #
 # Name:          dotfile
@@ -67,6 +67,7 @@ Where <options> consist of 1 or more of the following:
     ( -D | --no-dependencies )                  - Do not include dependencies from other roles/products
     ( -P | --no-paths        )                  - Do not include role directories to PATH and LD_LIBRARY_PATH environment variables
     ( -S | --no-script       )                  - Do not execute role scripts
+    ( -T | --no-templates    )                  - Do not evaluate templates
     ( -x | --debug           )                  - Force debugging extra info to the log file
     ( -X | --trace           )                  - Force command tracing along with debug information
     ( -h | --help            )                  - Prints out this usage message
@@ -397,28 +398,31 @@ function describe_role
     USE_FILES=false
     USE_ALIASES=false
     USE_SCRIPT=false
+    USE_TEMPLATES=false
     FUNC_SWITCHES=""
     
     while [[ $# -gt 0 ]]; do
     
         case "$1" in
         
-            --alias  ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
-                       ;;
-            --files  ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
-                       ;;
-            --link   ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
-                       ;;
-            --env    ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
-                       ;;
-            --deps   ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
-                       ;;
-            --path   ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
-                       ;;
-            --script ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
-                       ;;
-            *        ) break
-                       ;;
+            --alias     ) shift; USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                          ;;
+            --files     ) shift; USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                          ;;
+            --link      ) shift; USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                          ;;
+            --env       ) shift; USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                          ;;
+            --deps      ) shift; USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                          ;;
+            --path      ) shift; USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                          ;;
+            --script    ) shift; USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                          ;;
+            --templates ) shift; USE_TEMPLATES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --templates"
+                          ;;
+            *           ) break
+                          ;;
                        
         esac
         
@@ -551,6 +555,8 @@ function release_role
                            ;;
             script       ) teardown_role_script       --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
+            templates    ) teardown_role_templates --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
+                           ;;
             *            ) print_error "Unknown value provided for [%s], the value is [%s]" "${DOTFILES_EVALUATION_ORDER}" "${STAGE}"
                            return 99
                            ;;
@@ -660,6 +666,8 @@ function request_role
             path         ) setup_role_paths        --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
             script       ) setup_role_script       --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
+                           ;;
+            templates    ) setup_role_templates --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${FUNC_SWITCHES} || return $?
                            ;;
             *            ) print_error "Unknown value provided for [%s], the value is [%s]" "${DOTFILES_EVALUATION_ORDER}" "${STAGE}"
                            return 99
@@ -1599,6 +1607,83 @@ function setup_role_links
     return $SUCCESS
 }
 
+function setup_role_templates
+{
+    NEW_ROLE=""
+    ROLE_LIST=""
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    i=0
+    my_arr=("$@")
+    for var in "$@"; do
+    
+        i=$(( i + 1 ))
+        
+        case "$var" in
+        
+            --role   ) NEW_ROLE="${my_arr[$i]}"
+                       ;;
+            --list   ) ROLE_LIST="${my_arr[$i]}"
+                       ;;
+        
+            --alias  ) USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+                       
+        esac
+        
+    done
+    
+    [[ "$USE_TEMPLATES" == "false" ]] && return $SUCCESS
+
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+    ROLE_TEMPLATES="$ROLE_PATH/templates"
+    
+    [[ ! -d "$ROLE_TEMPLATES" ]] && return $SUCCESS
+    
+    
+    #  Find direct children
+    TARGETS=$(find "$ROLE_TEMPLATES" -maxdepth 1 -mindepth 1 2>/dev/null)
+    
+    for SRC_FILE in ${TARGETS}; do
+    
+        TEMPLATE_STRATEGY="${DOTFILES_TEMPLATE_STRATEGY}"
+        if [[ "${TEMPLATE_STRATEGY}" == "auto" ]]; then
+            TEMPLATE_STRATEGY="shell"
+        fi
+    
+        case "${TEMPLATE_STRATEGY}" in
+    
+            shell   ) CONTENTS=$(cat "$SRC_FILE")
+                      eval echo "${CONTENTS}" > "${NEW_FILE}"
+                      return $?
+                      ;;
+            varrick ) ;;
+            jinja2  ) ;;
+        
+        esac
+        
+    done
+}
+
 function teardown_role_aliases
 {
     NEW_ROLE=""
@@ -2423,6 +2508,59 @@ function teardown_role_links
     return $SUCCESS
 }
 
+function teardown_role_templates
+{
+    NEW_ROLE=""
+    ROLE_LIST=""
+    USE_ENV=false
+    USE_LINK=false
+    USE_DEPS=false
+    USE_PATHS=false
+    USE_FILES=false
+    USE_ALIASES=false
+    USE_SCRIPT=false
+    FUNC_SWITCHES=""
+    
+    i=0
+    my_arr=("$@")
+    for var in "$@"; do
+    
+        i=$(( i + 1 ))
+        
+        case "$var" in
+        
+            --role   ) NEW_ROLE="${my_arr[$i]}"
+                       ;;
+            --list   ) ROLE_LIST="${my_arr[$i]}"
+                       ;;
+        
+            --alias  ) USE_ALIASES=true; FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+                       ;;
+            --files  ) USE_FILES=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+                       ;;
+            --link   ) USE_LINK=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+                       ;;
+            --env    ) USE_ENV=true;     FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+                       ;;
+            --deps   ) USE_DEPS=true;    FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+                       ;;
+            --path   ) USE_PATHS=true;   FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+                       ;;
+            --script ) USE_SCRIPT=true;  FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+                       ;;
+                       
+        esac
+        
+    done
+    
+    [[ "$USE_TEMPLATES" == "false" ]] && return $SUCCESS
+
+    ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
+    ROLE_TEMPLATES="$ROLE_PATH/templates"
+    
+    [[ ! -d "$ROLE_TEMPLATES" ]] && return $SUCCESS
+}
+
 
 #-- Includes -------------------------------------------------------------------------------------------------------
 
@@ -2514,6 +2652,7 @@ USE_PATHS="${DOTFILES_INCLUDE_PATHS:-true}"         # Do we build paths if requi
 USE_FILES="${DOTFILES_INCLUDE_FILES:-true}"         # Do we copy files if required
 USE_ALIASES="${DOTFILES_INCLUDE_ALIASES:-true}"     # Do we instantiate aliases
 USE_SCRIPT="${DOTFILES_INCLUDE_SCRIPT:-true}"       # Do we include role environments / scripts
+USE_TEMPLATES="${DOTFILES_INCLUDE_TEMPLATES:-true}" # Do we evaluate templates
 
 DEBUG="${DOTFILES_DEBUG:-false}"                    # Debug messages to log output
 TRACE=false                                         # Trace is purely at a user level
@@ -2542,6 +2681,8 @@ while [[ $# -ne 0 ]]; do
                                  ;;
         -S | --no-script       ) shift; USE_SCRIPT=false
                                  ;;
+        -T | --no-templates    ) shift; USE_TEMPLATES=false
+                                 ;;
         -f | --force           ) shift; FORCE_HIDDEN=true
                                  ;;
         -x | --debug           ) shift; DEBUG=true
@@ -2562,13 +2703,14 @@ done
 
 # For easier parsing we'll use switches for our core functions
 FUNC_SWITCHES=""
-[[ "$USE_ALIASES" == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
-[[ "$USE_FILES"   == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --files"
-[[ "$USE_LINK"    == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --link"
-[[ "$USE_ENV"     == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --env"
-[[ "$USE_DEPS"    == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
-[[ "$USE_PATHS"   == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --path"
-[[ "$USE_SCRIPT"  == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+[[ "$USE_ALIASES"    == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --alias"
+[[ "$USE_FILES"      == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --files"
+[[ "$USE_LINK"       == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --link"
+[[ "$USE_ENV"        == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --env"
+[[ "$USE_DEPS"       == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --deps"
+[[ "$USE_PATHS"      == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --path"
+[[ "$USE_SCRIPT"     == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --script"
+[[ "$USE_TEMPLATES"  == "true" ]] && FUNC_SWITCHES="${FUNC_SWITCHES} --templates"
 
 # Check we have the right amount of parameters left
 if [[ $# -lt 2 ]]; then
@@ -2607,7 +2749,7 @@ ROLE_LIST=$( list_roles "${DOTFILES_ROLES_PATH}" )
 case "$MAIN_CMD" in
 
     list   ) printf "%s\n" "${ROLE_LIST}"
-    return $SUCCESS
+             return $SUCCESS
              ;;
     status ) print_status
              return $SUCCESS
