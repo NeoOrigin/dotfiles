@@ -1510,28 +1510,38 @@ function setup_role_templates
         SHORT_NAME_SAFE=$(escape_regex "${SHORT_NAME}")
         
         BASE_PATH=$(echo ~)
-        TEMPLATE_LIST=""
-        
-        # Check if there is a role configuration file redirecting this link
-        [[ -f "$ROLE_PATH/meta"  ]] && TEMPLATE_LIST=$(grep -v "^[tT][eE][mM][pP][lL][aA][tT][eE] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
-        [[ -n "${TEMPLATE_LIST}" ]] && BASE_PATH="${TEMPLATE_LIST}"
-        
         TEMPLATE_STRATEGY="${DOTFILES_TEMPLATE_STRATEGY}"
-        if [[ "${TEMPLATE_STRATEGY}" == "auto" ]]; then
+        
+        # Check if there is a role configuration file specifying overrides for the template strategy or its target location
+        if [[ -f "$ROLE_PATH/meta"  ]]; then
+        
+            TEMPLATE_LIST=$( grep -v "^[tT][eE][mM][pP][lL][aA][tT][eE] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
+            TEMPLATE_STRAT=$(grep -v "^[tT][eE][mM][pP][lL][aA][tT][eE][-][sS][tT][rR][aA][tT][eE][gG][yY] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
+            
+            [[ -n "${TEMPLATE_LIST}"  ]] && BASE_PATH="${TEMPLATE_LIST}"
+            [[ -n "${TEMPLATE_STRAT}" ]] && TEMPLATE_STRATEGY="${TEMPLATE_STRAT}"
+            
+        fi
+        
+        # If we are basing the engine on the file extension then set strategy override appropriately
+        if [[ "${TEMPLATE_STRATEGY:-auto}" == "auto" ]]; then
             FILE_EXTENSION="${SHORT_NAME##*.}"
             
             case "${FILE_EXTENSION}" in
             
-                sh     ) TEMPLATE_STRATEGY="shell"
+                j2     ) TEMPLATE_STRATEGY="j2cli"
                          ;;
-                j2     ) TEMPLATE_STRATEGY="jinja2"
+                jinja2 ) TEMPLATE_STRATEGY="jinja2"
                          ;;
                 tmpl   ) TEMPLATE_STRATEGY="varrick"
                          ;;
-            
+                *      ) TEMPLATE_STRATEGY="shell"
+                         ;;
+                
             esac
         fi
     
+        # Run the template engine, copying the file into the target directory
         case "${TEMPLATE_STRATEGY:-shell}" in
     
             shell   ) # Need to shell escape
@@ -1541,8 +1551,15 @@ function setup_role_templates
                       ;;
             varrick ) varrick "${name}" "${BASE_PATH}/"
                       ;;
-            jinja2  ) ;;
-        
+            jinja2  ) NEW_SHORT_NAME=$(basename "${name}" .j2)
+                      jinja2 "${name}" > "${BASE_PATH}/${NEW_SHORT_NAME}"
+                      ;;
+            j2cli   ) NEW_SHORT_NAME=$(basename "${name}" .j2)
+                      j2 "${name}" > "${BASE_PATH}/${NEW_SHORT_NAME}"
+                      ;;
+            *       ) print_error "Unknown template engine [%s] specified for [%s]" "${TEMPLATE_STRATEGY}" "$name"
+                      return 78
+                      ;;
         esac
         
     done
