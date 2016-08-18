@@ -1,6 +1,7 @@
 # README
 
 [![GitHub license](https://img.shields.io/badge/license-GPLv3-blue.svg)](https://raw.githubusercontent.com/pbowditch/dotfiles/master/COPYING)
+[![GitHub release](https://img.shields.io/github/release/pbowditch/dotfiles.svg)](https://github.com/pbowditch/dotfiles/releases/latest)
 
 The dotfiles project is intended to be used as a centralised store of role based configuration required in a UNIX environment.  This information consists (but is not limited to):
 
