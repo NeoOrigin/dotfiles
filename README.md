@@ -21,9 +21,6 @@ to setup and debug.
 > in a simplistic, centralised and pure UNIX manner.  It is primarily designed for command line environments and builds
 > on the concept of roles in an additive fashion.  
 
-### Version
-(https://raw.githubusercontent.com/pbowditch/dotfiles/master/VERSION)
-
 ### Tech
 
 dotfiles is a pure shell based solution and has no other dependencies other than a POSIX compliant shell such as bash or ksh.  
