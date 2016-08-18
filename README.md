@@ -1,4 +1,4 @@
-# README
+# dotfiles
 
 [![GitHub license](https://img.shields.io/badge/license-GPLv3-blue.svg)](https://raw.githubusercontent.com/pbowditch/dotfiles/master/COPYING)
 [![GitHub release](https://img.shields.io/github/release/pbowditch/dotfiles.svg)](https://github.com/pbowditch/dotfiles/releases/latest)
