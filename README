@@ -1,5 +1,7 @@
 # README
 
+[![GitHub license](https://img.shields.io/badge/license-GPLv3-blue.svg)](https://raw.githubusercontent.com/pbowditch/dotfiles/master/COPYING)
+
 The dotfiles project is intended to be used as a centralised store of role based configuration required in a UNIX environment.  This information consists (but is not limited to):
 
   - Environment Variables
@@ -8,6 +10,7 @@ The dotfiles project is intended to be used as a centralised store of role based
   - Files
   - Symbolic Links
   - Paths
+  - Templates
 
 The project came about in an organisation where there were 40+ developers working across 20+ servers, many of which shared multiple roles and responsibilities including architecture, development, database administration, gui development and so forth.  With the ease of spinning up virtual machines, the increased ingestion of "Big Data" and the demands it places on scalability a framework was required whereby users could share configuration
 data in a version controlled manner.  With so many developers (multipled by the myriad of test and production environments) user configurations were almost always non standard and required significant effort at the time 
@@ -18,7 +21,7 @@ to setup and debug.
 > on the concept of roles in an additive fashion.  
 
 ### Version
-1.2.0
+(https://raw.githubusercontent.com/pbowditch/dotfiles/master/VERSION)
 
 ### Tech
 
@@ -29,7 +32,7 @@ dotfiles is a pure shell based solution and has no other dependencies other than
 Install dotfiles from git into your local directory (we suggest using ~/projects as the parent folder so your home directory doesnt get too cluttered).  
 
 ```sh
-$ git clone bis_git@cecpvmlx016:dotfiles.git
+$ git clone git@mybox:dotfiles.git
 ```
 
 Add the following lines to your .profile (replacing the <role> marker with the name of the role you wish to inherit).  
@@ -57,7 +60,7 @@ in a shell script that follows the naming convention
 .<product>.profile
 ```
 
-The following are preconfigured for BIS use:
+The following are preconfigured for use:
 
 * Ab Initio
 * Cognos
@@ -75,7 +78,7 @@ in turn initialise specific product scripts mentioned above to fulfill their rol
 also perform many more functions such as setting environment variables based on the hostname, conditional inclusion
 of roles based on the date or defining simple aliases for use if a terminal is present.  
 
-The following are preconfigured for BIS use:
+The following are preconfigured for use:
 
 * ai_developer
 * ai_operator
@@ -88,9 +91,4 @@ The following are preconfigured for BIS use:
  - Diff roles
  - Support Bash
  - Support SPSS and Syncsort
-
-License
-----
-
-MIT
 
