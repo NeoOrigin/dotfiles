@@ -2428,7 +2428,9 @@ if [[ ! -w "$DOTFILES_LOG" ]]; then
     ${leave} $ERR_INVALID_LOG_PATH
 fi
 
-log_it INFO PARAMS "dotfile $@"
+PREFIXED=""
+[[ "${leave}" == "return" ]] && PREFIXED=". "
+log_it INFO PARAMS "${PREFIXED}dotfile $@"
 if [[ $? -ne 0 ]]; then
     print_error "Could not write to %s [%s] is not a valid file.  Exiting" DOTFILES_LOG "$DOTFILES_LOG"
     ${leave} $ERR_INVALID_LOG_PATH
