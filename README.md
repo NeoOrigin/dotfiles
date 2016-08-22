@@ -62,6 +62,7 @@ define environment characteristics to fulfill their roles, e.g. setting up envir
 
 This is mostly defined in a modularized fashion, creating configuration files under the role.  For example an example role that defines both environment variables and a dependency on another role could look like the following:
 
+```sh
 .oracle
     env
     aliases
@@ -72,6 +73,7 @@ This is mostly defined in a modularized fashion, creating configuration files un
 oracle_dba
     dependencies
     env
+```
 
 ### Roles Vs Software
 
