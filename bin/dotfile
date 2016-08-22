@@ -466,8 +466,9 @@ function release_role
     NEW_ROLE="$1"
     NEW_ROLE_ACTION="$2"
     ROLE_LIST="$3"
+    DEBUG_VAL="$4"
     
-    shift 3
+    shift 4
     
     # Normalize for easier pattern matching etc
     NEW_ROLE_UPPER=$(normalize_role "${NEW_ROLE}")
@@ -523,21 +524,21 @@ function release_role
     
         case "${STAGE}" in
         
-            aliases      ) teardown_role_aliases      --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            aliases      ) teardown_role_aliases      --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            files        ) teardown_role_files        --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            files        ) teardown_role_files        --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            links        ) teardown_role_links        --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            links        ) teardown_role_links        --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            dependencies ) teardown_role_dependencies --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            dependencies ) teardown_role_dependencies --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            env          ) teardown_role_environment  --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            env          ) teardown_role_environment  --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            path         ) teardown_role_paths        --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            path         ) teardown_role_paths        --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            script       ) teardown_role_script       --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            script       ) teardown_role_script       --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            templates    ) teardown_role_templates    --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            templates    ) teardown_role_templates    --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
             *            ) print_error "Unknown value provided for [%s], the value is [%s]" "${DOTFILES_EVALUATION_ORDER}" "${STAGE}"
                            return 99
@@ -555,8 +556,9 @@ function request_role
     NEW_ROLE="$1"
     NEW_ROLE_ACTION="$2"
     ROLE_LIST="$3"
+    DEBUG_VAL="$4"
     
-    shift 3
+    shift 4
     
     # Normalize for easier pattern matching etc
     NEW_ROLE_UPPER=$(normalize_role "${NEW_ROLE}")
@@ -606,21 +608,21 @@ function request_role
 
         case "${STAGE}" in
         
-            aliases      ) setup_role_aliases      --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            aliases      ) setup_role_aliases      --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            files        ) setup_role_files        --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            files        ) setup_role_files        --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            links        ) setup_role_links        --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            links        ) setup_role_links        --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            dependencies ) setup_role_dependencies --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            dependencies ) setup_role_dependencies --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            env          ) setup_role_environment  --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            env          ) setup_role_environment  --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            path         ) setup_role_paths        --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            path         ) setup_role_paths        --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            script       ) setup_role_script       --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            script       ) setup_role_script       --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
-            templates    ) setup_role_templates    --role "${NEW_ROLE}" --list "${ROLE_LIST}" "$@" || return $?
+            templates    ) setup_role_templates    --role "${NEW_ROLE}" --list "${ROLE_LIST}" ${DEBUG_VAL} "$@" || return $?
                            ;;
             *            ) print_error "Unknown value provided for [%s], the value is [%s]" "${DOTFILES_EVALUATION_ORDER}" "${STAGE}"
                            return 99
@@ -645,7 +647,7 @@ function setup_role_aliases
     
     NEW_ROLE=""
     ROLE_LIST=""
-
+    DEBUG=""
     USE_ALIASES=""
     
     i=0
@@ -663,6 +665,8 @@ function setup_role_aliases
         
             --alias  ) USE_ALIASES="$var"
                        ;;
+            --debug  ) DEBUG="$var"
+                       ;;
                        
         esac
         
@@ -679,7 +683,7 @@ function setup_role_aliases
     [[ ! -f "$ROLE_ALIASES" ]] && return $SUCCESS
     
     
-    . "$DOTFILES_HOME/lib/modules/aliases/main" --setup --debug --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta"
+    . "$DOTFILES_HOME/lib/modules/aliases/main" --setup ${DEBUG} --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta"
     
     return $?
 }
@@ -702,6 +706,7 @@ function setup_role_dependencies
     USE_ALIASES=""
     USE_SCRIPT=""
     USE_TEMPLATES=""
+    DEBUG=""
     
     i=0
     my_arr=("$@")
@@ -732,7 +737,8 @@ function setup_role_dependencies
                           ;;
             --templates ) USE_TEMPLATES="$var"
                           ;;
-                       
+            --debug     ) DEBUG="$var"
+                          ;;
         esac
         
     done
@@ -763,11 +769,11 @@ function setup_role_dependencies
         [[ -z "$USE_ALIASES"   ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-aliases"
         [[ -z "$USE_SCRIPT"    ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-script"
         [[ -z "$USE_TEMPLATES" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-templates"
-        [[ "$DEBUG" == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --debug"
+        #[[ "$DEBUG" == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --debug"
         [[ "$TRACE" == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --trace"
             
         # NOTE: We do not add an option for use dependencies, it is assumed otherwise we would not have got this far in the function
-        . $DOTFILES_HOME/bin/dotfile --force ${REVERSE_FUNC_SWITCHES} request "${ROLE_NAME}"
+        . $DOTFILES_HOME/bin/dotfile --force ${DEBUG} ${REVERSE_FUNC_SWITCHES} request "${ROLE_NAME}"
         if [[ $? -ne 0 ]]; then
             print_error "Could not add dependency [%s] from role [%s]" "$ROLE_NAME" "$ROLE_PATH"
             return $ERR_CREATE_DEPENDENCY_FAILED
@@ -785,7 +791,8 @@ function setup_role_dependencies
         USE_ALIASES=""
         USE_SCRIPT=""
         USE_TEMPLATES=""
-    
+        DEBUG=""
+        
         i=0
         my_arr=("$@")
         for var in "$@"; do
@@ -815,7 +822,9 @@ function setup_role_dependencies
                               ;;
                 --templates ) USE_TEMPLATES="$var"
                               ;;
-                       
+                --debug     ) DEBUG="$var"
+                              ;;
+            
             esac
         
         done
@@ -837,6 +846,7 @@ function setup_role_environment
 {
     NEW_ROLE=""
     ROLE_LIST=""
+    DEBUG=""
     
     USE_ENV=""
 
@@ -855,6 +865,8 @@ function setup_role_environment
         
             --env    ) USE_ENV="$var"
                        ;;
+            --debug  ) DEBUG="$var"
+                       ;;
                        
         esac
         
@@ -869,7 +881,7 @@ function setup_role_environment
     # last step is to inherit the environment if configured and there is an executable file
     [[ ! -f "$ROLE_ENV" ]] && return $SUCCESS
 
-    . "$DOTFILES_HOME/lib/modules/env/main" --setup --debug --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta"
+    . "$DOTFILES_HOME/lib/modules/env/main" --setup ${DEBUG} --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta"
     
     return $?
 }
@@ -886,7 +898,8 @@ function setup_role_script
     USE_ALIASES=""
     USE_SCRIPT=""
     USE_TEMPLATES=""
-
+    DEBUG=""
+    
     i=0
     my_arr=("$@")
     for var in "$@"; do
@@ -916,7 +929,8 @@ function setup_role_script
                           ;;
             --templates ) USE_TEMPLATES="$var"
                           ;;
-                       
+            --debug     ) DEBUG="$var"
+                          ;;
         esac
         
     done
@@ -936,7 +950,7 @@ function setup_role_script
 
 
     #${DEBUG} && log_it DEBUG CALL ". ${ROLE_MAIN} --setup ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}"
-    . "$DOTFILES_HOME/lib/modules/script/main" --setup --debug --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
+    . "$DOTFILES_HOME/lib/modules/script/main" --setup ${DEBUG} --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
 
     return $?
 }
@@ -945,7 +959,7 @@ function setup_role_paths
 {
     NEW_ROLE=""
     ROLE_LIST=""
-
+    DEBUG=""
     USE_PATHS=""
     
     i=0
@@ -963,6 +977,8 @@ function setup_role_paths
         
             --path   ) USE_PATHS="$var"
                        ;;
+            --debug  ) DEBUG="$var"
+                       ;;
                        
         esac
         
@@ -974,7 +990,7 @@ function setup_role_paths
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
     ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     
-    . "$DOTFILES_HOME/lib/modules/paths/main" --setup --debug --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
+    . "$DOTFILES_HOME/lib/modules/paths/main" --setup ${DEBUG} --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
 
     return $?
 }
@@ -983,6 +999,7 @@ function setup_role_files
 {
     NEW_ROLE=""
     ROLE_LIST=""
+    DEBUG=""
     USE_FILES=""
     
     i=0
@@ -999,6 +1016,8 @@ function setup_role_files
                        ;;
         
             --files  ) USE_FILES="$var"
+                       ;;
+            --debug  ) DEBUG="$var"
                        ;;
                        
         esac
@@ -1028,7 +1047,7 @@ function setup_role_files
             
         FILES_LIST=""
         [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^[fF][iI][lL][eE] ${SHORT_NAME_SAFE} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
-        [[ -n "${FILES_LIST}" ]] && BASE_PATH="${FILES_LIST}"
+        [[ -n "${FILES_LIST}"   ]] && BASE_PATH="${FILES_LIST}"
             
         FILES_MANAGED=$(grep -v "^${SHORT_NAME_SAFE} " "${BASE_PATH}/.dotfile.managed")
         ACTUAL_VALUE="-"
@@ -1202,7 +1221,7 @@ function setup_role_links
 {
     NEW_ROLE=""
     ROLE_LIST=""
-
+    DEBUG=""
     USE_LINK=""
     
     i=0
@@ -1220,6 +1239,8 @@ function setup_role_links
         
             --link   ) USE_LINK="$var"
                        ;;
+            --debug  ) DEBUG="$var"
+                       ;;
                        
         esac
         
@@ -1234,7 +1255,7 @@ function setup_role_links
     # First step is to create links if configured and the role contains them
     [[ ! -d "${ROLE_LINK}" ]] && return $SUCCESS
     
-    . "$DOTFILES_HOME/lib/modules/links/main" --setup --debug --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
+    . "$DOTFILES_HOME/lib/modules/links/main" --setup ${DEBUG} --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
 
     return $?
 }
@@ -1243,6 +1264,7 @@ function setup_role_templates
 {
     NEW_ROLE=""
     ROLE_LIST=""
+    DEBUG=""
     USE_TEMPLATES=""
     
     i=0
@@ -1260,6 +1282,8 @@ function setup_role_templates
         
             --templates ) USE_TEMPLATES="$var"
                           ;;
+            --debug     ) DEBUG="$var"
+                          ;;
                        
         esac
         
@@ -1273,7 +1297,7 @@ function setup_role_templates
     [[ ! -d "$ROLE_TEMPLATES" ]] && return $SUCCESS
     
 
-    . "$DOTFILES_HOME/lib/modules/templates/main" --setup --debug --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
+    . "$DOTFILES_HOME/lib/modules/templates/main" --setup ${DEBUG} --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
 
     return $?
 }
@@ -1282,6 +1306,7 @@ function teardown_role_aliases
 {
     NEW_ROLE=""
     ROLE_LIST=""
+    DEBUG=""
     USE_ALIASES=""
     
     i=0
@@ -1299,6 +1324,8 @@ function teardown_role_aliases
         
             --alias  ) USE_ALIASES="$var"
                        ;;
+            --debug  ) DEBUG="$var"
+                       ;;
                        
         esac
         
@@ -1313,7 +1340,7 @@ function teardown_role_aliases
     [[ ! -f "$ROLE_ALIASES" ]] && return $SUCCESS
     
     
-    . "$DOTFILES_HOME/lib/modules/aliases/main" --teardown --debug --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta"
+    . "$DOTFILES_HOME/lib/modules/aliases/main" --teardown ${DEBUG} --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta"
     
     return $?
 }
@@ -1330,6 +1357,7 @@ function teardown_role_dependencies
     USE_ALIASES=""
     USE_SCRIPT=""
     USE_TEMPLATES=""
+    DEBUG=""
     
     i=0
     my_arr=("$@")
@@ -1360,7 +1388,8 @@ function teardown_role_dependencies
                           ;;
             --templates ) USE_TEMPLATES="$var"
                           ;;
-                       
+            --debug     ) DEBUG="$var"
+                          ;;
         esac
         
     done
@@ -1388,11 +1417,11 @@ function teardown_role_dependencies
         [[ -z "$USE_ALIASES"   ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-aliases"
         [[ -z "$USE_SCRIPT"    ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-script"
         [[ -z "$USE_TEMPLATES" ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --no-templates"
-        [[ "$DEBUG" == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --debug"
+        #[[ "$DEBUG" == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --debug"
         [[ "$TRACE" == "true"  ]] && REVERSE_FUNC_SWITCHES="${REVERSE_FUNC_SWITCHES} --trace"
             
             
-        . $DOTFILES_HOME/bin/dotfile ${REVERSE_FUNC_SWITCHES} release "${ROLE_NAME}"
+        . $DOTFILES_HOME/bin/dotfile ${DEBUG} ${REVERSE_FUNC_SWITCHES} release "${ROLE_NAME}"
         if [[ $? -ne 0 ]]; then
             print_error "Could not remove dependency [%s] from role [%s]" "${ROLE_NAME}" "${NEW_ROLE}"
             return $ERR_DELETE_DEPENDENCY_FAILED
@@ -1410,7 +1439,8 @@ function teardown_role_dependencies
         USE_ALIASES=""
         USE_SCRIPT=""
         USE_TEMPLATES=""
-    
+        DEBUG=""
+        
         i=0
         my_arr=("$@")
         for var in "$@"; do
@@ -1440,7 +1470,8 @@ function teardown_role_dependencies
                               ;;
                 --templates ) USE_TEMPLATES="$var"
                               ;;
-                       
+                --debug     ) DEBUG="$var"
+                              ;;
             esac
         
         done
@@ -1462,6 +1493,7 @@ function teardown_role_environment
 {
     NEW_ROLE=""
     ROLE_LIST=""
+    DEBUG=""
     USE_ENV=""
     
     i=0
@@ -1479,6 +1511,8 @@ function teardown_role_environment
         
             --env    ) USE_ENV="$var"
                        ;;
+            --debug  ) DEBUG="$var"
+                       ;;
                        
         esac
         
@@ -1494,7 +1528,7 @@ function teardown_role_environment
     [[ ! -f "$ROLE_ENV" ]] && return $SUCCESS
 
 
-    . "$DOTFILES_HOME/lib/modules/env/main" --teardown --debug --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta"
+    . "$DOTFILES_HOME/lib/modules/env/main" --teardown ${DEBUG} --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta"
     
     return $?
 }
@@ -1511,6 +1545,7 @@ function teardown_role_script
     USE_ALIASES=""
     USE_SCRIPT=""
     USE_TEMPLATES=""
+    DEBUG=""
     
     i=0
     my_arr=("$@")
@@ -1541,6 +1576,8 @@ function teardown_role_script
                           ;;
             --templates ) USE_TEMPLATES="$var"
                           ;;
+            --debug     ) DEBUG="$var"
+                          ;;
                        
         esac
         
@@ -1559,7 +1596,7 @@ function teardown_role_script
 
 
     #${DEBUG} && log_it DEBUG CALL ". ${ROLE_MAIN} --teardown ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}"
-    . "$DOTFILES_HOME/lib/modules/script/main" --teardown --debug --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
+    . "$DOTFILES_HOME/lib/modules/script/main" --teardown ${DEBUG} --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
     
     return $?
 }
@@ -1568,7 +1605,7 @@ function teardown_role_paths
 {
     NEW_ROLE=""
     ROLE_LIST=""
-
+    DEBUG=""
     USE_PATHS=""
     
     i=0
@@ -1586,6 +1623,8 @@ function teardown_role_paths
         
             --path   ) USE_PATHS="$var"
                        ;;
+            --debug  ) DEBUG="$var"
+                       ;;
                        
         esac
         
@@ -1596,7 +1635,7 @@ function teardown_role_paths
     # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
     ROLE_PATH=$( get_role_path "${NEW_ROLE}" "$ROLE_LIST" )
     
-    . "$DOTFILES_HOME/lib/modules/paths/main" --teardown --debug --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
+    . "$DOTFILES_HOME/lib/modules/paths/main" --teardown ${DEBUG} --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
     
     return $?
 }
@@ -1609,7 +1648,7 @@ function teardown_role_files
     return $SUCCESS
     NEW_ROLE=""
     ROLE_LIST=""
-
+    DEBUG=""
     USE_FILES=""
     
     i=0
@@ -1626,6 +1665,8 @@ function teardown_role_files
                        ;;
         
             --files  ) USE_FILES="$var"
+                       ;;
+            --debug  ) DEBUG="$var"
                        ;;
                        
         esac
@@ -1653,7 +1694,7 @@ function teardown_role_files
             
         FILES_LIST=""
         [[ -f "$ROLE_PATH/meta" ]] && FILES_LIST=$(grep -v "^[fF][iI][lL][eE] ${SHORT_NAME} " "$ROLE_PATH/meta" | head -1 | cut -d" " -f3)
-        [[ -n "${FILES_LIST}" ]] && BASE_PATH="${FILES_LIST}"
+        [[ -n "${FILES_LIST}"   ]] && BASE_PATH="${FILES_LIST}"
             
         FILES_MANAGED=$(grep -v "^${SHORT_NAME} " "${BASE_PATH}/.dotfile.managed")
         ACTUAL_VALUE="-"
@@ -1826,7 +1867,7 @@ function teardown_role_links
 {
     NEW_ROLE=""
     ROLE_LIST=""
-
+    DEBUG=""
     USE_LINK=""
     
     i=0
@@ -1844,6 +1885,8 @@ function teardown_role_links
         
             --link   ) USE_LINK="$var"
                        ;;
+            --debug  ) DEBUG="$var"
+                       ;;
                        
         esac
         
@@ -1858,7 +1901,7 @@ function teardown_role_links
     [[ ! -d "${ROLE_LINK}" ]] && return $SUCCESS
     
     
-    . "$DOTFILES_HOME/lib/modules/links/main" --teardown --debug --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
+    . "$DOTFILES_HOME/lib/modules/links/main" --teardown ${DEBUG} --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
     
     return $?
 }
@@ -1867,7 +1910,7 @@ function teardown_role_templates
 {
     NEW_ROLE=""
     ROLE_LIST=""
-    
+    DEBUG=""
     USE_TEMPLATES=""
     
     i=0
@@ -1885,6 +1928,8 @@ function teardown_role_templates
         
             --templates ) USE_TEMPLATES="$var"
                           ;;
+            --debug     ) DEBUG="$var"
+                          ;;
                        
         esac
         
@@ -1897,7 +1942,7 @@ function teardown_role_templates
     
     [[ ! -d "$ROLE_TEMPLATES" ]] && return $SUCCESS
     
-    . "$DOTFILES_HOME/lib/modules/templates/main" --teardown --debug --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
+    . "$DOTFILES_HOME/lib/modules/templates/main" --teardown ${DEBUG} --role "${ROLE_PATH}" --meta "$ROLE_PATH/meta" # "$@"
     
     return $?
 }
@@ -2061,6 +2106,8 @@ if [[ "$USE_ALIASES"   == "true" ]]; then USE_ALIASES="--alias";       else USE_
 if [[ "$USE_SCRIPT"    == "true" ]]; then USE_SCRIPT="--script";       else USE_SCRIPT="";    fi
 if [[ "$USE_TEMPLATES" == "true" ]]; then USE_TEMPLATES="--templates"; else USE_TEMPLATES=""; fi
 
+if [[ "$DEBUG" == "true" ]]; then DEBUG="--debug"; else DEBUG=""; fi
+
 
 # Check we have the right amount of parameters left
 if [[ $# -lt 2 ]]; then
@@ -2138,13 +2185,13 @@ export DOTFILES_ALLOCATION_INDEX="${DOTFILES_ALLOCATION_INDEX:-0}"
 # Basic validation
 case "$MAIN_CMD" in
 
-    request            ) request_role  "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}
+    request            ) request_role  "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" ${DEBUG} ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}
                          RC=$?
                          ;;
-    release            ) release_role  "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}
+    release            ) release_role  "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" ${DEBUG} ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}
                          RC=$?
                          ;;
-    reset              ) release_role  "@"         "$NEW_ROLE_ACTION" "$ROLE_LIST" ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}
+    reset              ) release_role  "@"         "$NEW_ROLE_ACTION" "$ROLE_LIST" ${DEBUG} ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}
                          RC=$?
                          ;;
     
