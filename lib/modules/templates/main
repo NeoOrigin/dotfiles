@@ -1,0 +1,175 @@
+#!/bin/sh
+#####################################################################################################################
+#
+# Name:          templates/main
+# Developer:     Philip Bowditch
+# Created:       20151110
+# Description:
+#
+#####################################################################################################################
+
+
+#-- Functions -------------------------------------------------------------------------------------------------------
+
+function properties
+{
+    printf "REGISTER: %s\n" "templates"
+    printf "TYPE: %s\n"     "directory"
+}
+
+function setup
+{
+    ROLE_PATH=""
+    META_PATH=""
+    DEBUG=false
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --role  ) ROLE_PATH="$2"; shift 2
+                      ;;
+            --meta  ) META_PATH="$2"; shift 2
+                      ;;
+            --debug ) DEBUG=true; shift
+                      ;;
+        
+        esac
+        
+    done
+    
+    
+    ROLE_TEMPLATES="$ROLE_PATH/templates"
+    ROLE_NAME=$(basename "$ROLE_PATH")
+    
+    #  Find direct children
+    TARGETS=$(find "$ROLE_TEMPLATES" -maxdepth 1 -mindepth 1 2>/dev/null | sort)
+    
+    for name in ${TARGETS}; do
+    
+        SHORT_NAME=$(basename "${name}")
+        SHORT_NAME_SAFE=$(escape_regex "${SHORT_NAME}")
+        
+        BASE_PATH=$(echo ~)
+        TEMPLATE_STRATEGY="${DOTFILES_TEMPLATE_STRATEGY}"
+        
+        # Check if there is a role configuration file specifying overrides for the template strategy or its target location
+        if [[ -f "$META_PATH"  ]]; then
+        
+            TEMPLATE_LIST=$( sed 's|^[ ]*||g' "$META_PATH" | grep -iv "^template " | grep -v "^[a-zA-Z]* ${SHORT_NAME_SAFE} " | head -1 | cut -d" " -f3)
+            TEMPLATE_STRAT=$(sed 's|^[ ]*||g' "$META_PATH" | grep -iv "^template-strategy " | grep -v "^[a-zA-Z]* ${SHORT_NAME_SAFE} " | head -1 | cut -d" " -f3)
+            
+            [[ -n "${TEMPLATE_LIST}"  ]] && BASE_PATH="${TEMPLATE_LIST}"
+            [[ -n "${TEMPLATE_STRAT}" ]] && TEMPLATE_STRATEGY="${TEMPLATE_STRAT}"
+            
+        fi
+        
+        # If we are basing the engine on the file extension then set strategy override appropriately
+        if [[ "${TEMPLATE_STRATEGY:-auto}" == "auto" ]]; then
+            FILE_EXTENSION="${SHORT_NAME##*.}"
+            
+            case "${FILE_EXTENSION}" in
+            
+                j2     ) TEMPLATE_STRATEGY="j2cli"
+                         ;;
+                jinja2 ) TEMPLATE_STRATEGY="jinja2"
+                         ;;
+                tmpl   ) TEMPLATE_STRATEGY="varrick"
+                         ;;
+                *      ) TEMPLATE_STRATEGY="shell"
+                         ;;
+                
+            esac
+        fi
+    
+        # Run the template engine, copying the file into the target directory
+        case "${TEMPLATE_STRATEGY:-shell}" in
+    
+            shell   ) # Need to shell escape
+                      NEW_SHORT_NAME=$(basename "${name}" .sh)
+                      CONTENTS=$(cat "$name")
+                      ${DEBUG} && printf "%s: %s: %s[%s]: eval '\$(< %s)' > '%s'\n" DEBUG "${ROLE_NAME}" templates shell "$name" "${BASE_PATH}/${NEW_SHORT_NAME}" >&2
+                      eval "echo \"${CONTENTS}\" > \"${BASE_PATH}/${NEW_SHORT_NAME}\""
+                      ;;
+            varrick ) ${DEBUG} && printf "%s: %s: %s[%s]: varrick '%s' '%s'\n" DEBUG "${ROLE_NAME}" templates varrick "$name" "${BASE_PATH}/" >&2
+                      varrick "${name}" "${BASE_PATH}/"
+                      ;;
+            jinja2  ) NEW_SHORT_NAME=$(basename "${name}" .j2)
+                      ${DEBUG} && printf "%s: %s: %s[%s]: jinja2 '%s' > '%s'\n" DEBUG "${ROLE_NAME}" templates jinja2 "$name" "${BASE_PATH}/${NEW_SHORT_NAME}" >&2
+                      jinja2 "${name}" > "${BASE_PATH}/${NEW_SHORT_NAME}"
+                      ;;
+            j2cli   ) NEW_SHORT_NAME=$(basename "${name}" .j2)
+                      ${DEBUG} && printf "%s: %s: %s[%s]: j2 '%s' > '%s'\n" DEBUG "${ROLE_NAME}" templates j2cli "$name" "${BASE_PATH}/${NEW_SHORT_NAME}" >&2
+                      j2 "${name}" > "${BASE_PATH}/${NEW_SHORT_NAME}"
+                      ;;
+            *       ) printf "%s: Unknown template engine [%s] specified for [%s]\n" ERROR "${TEMPLATE_STRATEGY}" "$name" >&2
+                      return 78
+                      ;;
+        esac
+        
+    done
+    
+    return 0
+}
+
+function teardown
+{
+    ROLE_PATH=""
+    META_PATH=""
+    DEBUG=false
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --role  ) ROLE_PATH="$2"; shift 2
+                      ;;
+            --meta  ) META_PATH="$2"; shift 2
+                      ;;
+            --debug ) DEBUG=true; shift
+                      ;;
+        
+        esac
+        
+    done
+    
+    ROLE_TEMPLATES="$ROLE_PATH/templates"
+    ROLE_NAME=$(basename "$ROLE_PATH")
+    
+    # Look at direct children (in reverse)
+    TARGETS=$(find "$ROLE_TEMPLATES" -maxdepth 1 -mindepth 1 2>/dev/null | sort -r)
+        
+    # Go through all the files/folders found in the links folder as we need to point to them as symbolic
+    # links in the users home directory
+    for name in ${TARGETS}; do
+        
+        SHORT_NAME=$(basename "${name}")
+        SHORT_NAME_SAFE=$(escape_regex "${SHORT_NAME}")
+
+        BASE_PATH=$(echo ~)
+        
+        # Check if there is a role configuration file specifying overrides for the template strategy or its target location
+        if [[ -f "$META_PATH"  ]]; then
+        
+            TEMPLATE_LIST=$( sed 's|^[ ]*||g' "$META_PATH" | grep -iv "^template " | grep -v "^[a-zA-Z]* ${SHORT_NAME_SAFE} " | head -1 | cut -d" " -f3)
+            
+            [[ -n "${TEMPLATE_LIST}"  ]] && BASE_PATH="${TEMPLATE_LIST}"
+            
+        fi
+            
+    done
+    
+    return 0
+}
+
+
+#-- Main ------------------------------------------------------------------------------------------------------------
+
+case "$1" in
+
+    --setup    ) shift; setup "$@"
+                 ;;
+    --teardown ) shift; teardown "$@"
+                 ;;
+
+esac
