@@ -2167,10 +2167,10 @@ NEW_ROLE_ACTION=$( printf "%s\n" "$1" | cut -d":" -f2)
 
 case "$MAIN_CMD" in
 
-    describe           ) describe_role "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}
+    describe           ) describe_role "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" ${DEBUG} ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}
                          ${leave} $?
                          ;;
-    help               ) help_role "$NEW_ROLE"
+    help               ) help_role "$NEW_ROLE" "$NEW_ROLE_ACTION" "$ROLE_LIST" ${DEBUG} ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}
                          ${leave} $?
                          ;;
     
