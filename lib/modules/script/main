@@ -1,0 +1,101 @@
+#!/bin/sh
+#####################################################################################################################
+#
+# Name:          script/main
+# Developer:     Philip Bowditch
+# Created:       20151110
+# Description:
+#
+#####################################################################################################################
+
+
+#-- Functions -------------------------------------------------------------------------------------------------------
+
+function properties
+{
+    printf "REGISTER: %s\n" "main"
+    printf "TYPE: %s\n"     "file"
+}
+
+function setup
+{
+    ROLE_PATH=""
+    META_PATH=""
+    DEBUG=false
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --role  ) ROLE_PATH="$2"; shift 2
+                      ;;
+            --meta  ) META_PATH="$2"; shift 2
+                      ;;
+            --debug ) DEBUG=true; shift
+                      ;;
+        
+        esac
+        
+    done
+    
+    ROLE_NAME=$(basename "$ROLE_PATH")
+    
+    ${DEBUG} && printf "%s: %s: %s: '%s' %s\n" DEBUG "${ROLE_NAME}" script "${ROLE_PATH}/main" --setup >&2
+    . "${ROLE_PATH}/main" --setup ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}
+
+    if [[ $? -ne 0 ]]; then
+        printf "%s: Could not run script from role [%s]\n" ERROR "${ROLE_PATH}"
+        return 1
+    fi
+    
+    return 0
+}
+
+function teardown
+{
+    ROLE_PATH=""
+    META_PATH=""
+    
+    ROLE_PATH=""
+    META_PATH=""
+    DEBUG=false
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --role  ) ROLE_PATH="$2"; shift 2
+                      ;;
+            --meta  ) META_PATH="$2"; shift 2
+                      ;;
+            --debug ) DEBUG=true; shift
+                      ;;
+        
+        esac
+        
+    done
+    
+    ROLE_NAME=$(basename "$ROLE_PATH")
+    
+    ${DEBUG} && printf "%s: %s: %s: '%s' %s\n" DEBUG "${ROLE_NAME}" script "${ROLE_PATH}/main" --teardown >&2
+    . "${ROLE_PATH}/main" --teardown ${USE_ALIASES} ${USE_FILES} ${USE_LINK} ${USE_ENV} ${USE_DEPS} ${USE_PATHS} ${USE_SCRIPT} ${USE_TEMPLATES}
+
+    if [[ $? -ne 0 ]]; then
+        printf "%s: Could not release role [%s]\n" ERROR "${ROLE_PATH}"
+        return 1
+    fi
+    
+    return 0
+}
+
+
+#-- Main ------------------------------------------------------------------------------------------------------------
+
+case "$1" in
+
+    --setup    ) shift; setup "$@"
+                 ;;
+    --teardown ) shift; teardown "$@"
+                 ;;
+
+esac

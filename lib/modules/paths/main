@@ -1,0 +1,271 @@
+#!/bin/sh
+#####################################################################################################################
+#
+# Name:          paths/main
+# Developer:     Philip Bowditch
+# Created:       20151110
+# Description:   dotfiles module to handle adding directories to PATH like variables.  This module will add
+#                <role>/bin to PATH, <role>/lib to LD_LIBRARY_PATH and <role>/funcs to FPATH if present
+#
+#####################################################################################################################
+
+
+#-- Functions -------------------------------------------------------------------------------------------------------
+
+function properties
+{
+    printf "REGISTER: %s\n" "bin|lib|funcs"
+    printf "TYPE: %s\n"     "directory"
+}
+
+function setup
+{
+    ROLE_PATH=""
+    META_PATH=""
+    DEBUG=false
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --role  ) ROLE_PATH="$2"; shift 2
+                      ;;
+            --meta  ) META_PATH="$2"; shift 2
+                      ;;
+            --debug ) DEBUG=true; shift
+                      ;;
+        
+        esac
+        
+    done
+    
+    
+    # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
+    ROLE_BIN="$ROLE_PATH/bin"
+    ROLE_LIB="$ROLE_PATH/lib"
+    ROLE_FUN="$ROLE_PATH/funcs"
+    ROLE_NAME=$(basename "$ROLE_PATH")
+    
+    DIRECTION_BIN=""
+    DIRECTION_LIB=""
+    DIRECTION_FUN=""
+
+    if [[ -f "$META_PATH" ]]; then
+
+        DIRECTION_BIN=$(sed 's|^[ ]*||g' "$META_PATH" | grep -i "^path-method bin (append|prepend|none)\$"   | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
+        DIRECTION_LIB=$(sed 's|^[ ]*||g' "$META_PATH" | grep -i "^path-method lib (append|prepend|none)\$"   | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
+        DIRECTION_FUN=$(sed 's|^[ ]*||g' "$META_PATH" | grep -i "^path-method funcs (append|prepend|none)\$" | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
+
+    fi
+
+    # BIN
+    if [[ -d "$ROLE_BIN" ]]; then
+    
+        case "${DIRECTION_BIN:-prepend}" in
+
+            prepend ) ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" paths prepend "PATH" "$ROLE_BIN:$PATH" >&2
+                      export PATH="$ROLE_BIN:$PATH"
+                      ;;
+            append  ) ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" paths append "PATH" "$PATH:$ROLE_BIN" >&2
+                      export PATH="$PATH:$ROLE_BIN"
+                      ;;
+            none    ) ${DEBUG} && printf "%s: %s: %s[%s]:\n" DEBUG "${ROLE_NAME}" paths none >&2
+                      ;;
+            *       ) printf "%s: Unknown value [%s] given for %s directive in [%s]\n" ERROR "${DIRECTION_BIN}" "path-method" "$META_PATH" >&2
+                      return 1
+                      ;;
+
+        esac
+
+    fi
+
+    # FPATH
+    if [[ -d "$ROLE_FUN" ]]; then
+
+        case "${DIRECTION_FUN:-prepend}" in
+
+            prepend ) ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" paths prepend "FPATH" "$ROLE_FUN:$FPATH" >&2
+                      export FPATH="$ROLE_FUN:$FPATH"
+                      ;;
+            append  ) ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" paths append "FPATH" "$FPATH:$ROLE_FUN" >&2
+                      export FPATH="$FPATH:$ROLE_FUN"
+                      ;;
+            none    ) ${DEBUG} && printf "%s: %s: %s[%s]:\n" DEBUG "${ROLE_NAME}" paths none >&2
+                      ;;
+            *       ) printf "%s: Unknown value [%s] given for %s directive in [%s]\n" ERROR "${DIRECTION_BIN}" "path-method" "$META_PATH" >&2
+                      return 1
+                      ;;
+
+        esac
+    
+    fi
+
+    # LD_LIBRARY_PATH
+    if [[ -d "$ROLE_LIB" ]]; then
+    
+        case "${DIRECTION_LIB:-prepend}" in
+
+            prepend ) ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" paths prepend "LD_LIBRARY_PATH" "$ROLE_LIB:$LD_LIBRARY_PATH" >&2
+                      export LD_LIBRARY_PATH="$ROLE_LIB:$LD_LIBRARY_PATH"
+                      ;;
+            append  ) ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" paths append "LD_LIBRARY_PATH" "$LD_LIBRARY_PATH:$ROLE_LIB" >&2
+                      export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$ROLE_LIB"
+                      ;;
+            none    ) ${DEBUG} && printf "%s: %s: %s[%s]:\n" DEBUG "${ROLE_NAME}" paths none >&2
+                      ;;
+            *       ) printf "%s: Unknown value [%s] given for %s directive in [%s]\n" ERROR "${DIRECTION_BIN}" "path-method" "$META_PATH" >&2
+                      return 1
+                      ;;
+
+        esac
+    
+    fi
+    
+    return 0
+}
+
+function teardown
+{
+    ROLE_PATH=""
+    META_PATH=""
+    DEBUG=false
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --role  ) ROLE_PATH="$2"; shift 2
+                      ;;
+            --meta  ) META_PATH="$2"; shift 2
+                      ;;
+            --debug ) DEBUG=true; shift
+                      ;;
+        
+        esac
+        
+    done
+    
+    
+    # Find the base path to the role and core files that MAY exist within it (or it might just be a file itself)
+    ROLE_BIN="$ROLE_PATH/bin"
+    ROLE_LIB="$ROLE_PATH/lib"
+    ROLE_FUN="$ROLE_PATH/funcs"
+    ROLE_NAME=$(basename "$ROLE_PATH")
+    
+    DIRECTION_BIN=""
+    DIRECTION_LIB=""
+    DIRECTION_FUN=""
+
+    if [[ -f "$META_PATH" ]]; then
+
+        DIRECTION_BIN=$(sed 's|^[ ]*||g' "$META_PATH" | grep -i "^path-method bin (append|prepend|none)\$"   | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
+        DIRECTION_LIB=$(sed 's|^[ ]*||g' "$META_PATH" | grep -i "^path-method lib (append|prepend|none)\$"   | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
+        DIRECTION_FUN=$(sed 's|^[ ]*||g' "$META_PATH" | grep -i "^path-method funcs (append|prepend|none)\$" | cut -d" " -f2 | tr '[A-Z]' '[a-z]')
+
+    fi
+
+    # BIN
+    if [[ -d "$ROLE_BIN" ]]; then
+    
+        new_value="${PATH}"
+        
+        case "${DIRECTION_BIN:-prepend}" in
+
+            prepend ) new_value=$(printf "%s\n" "$PATH" | sed "s|^$ROLE_BIN:||g")
+                      ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" paths prepend "PATH" "$new_value" >&2
+                      export PATH="$new_value"
+                      ;;
+            append  ) new_value=$(printf "%s\n" "$PATH" | sed "s|:?${ROLE_BIN}\$||g")
+                      ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" paths append "PATH" "$new_value" >&2
+                      export PATH="$new_value"
+                      ;;
+            none    ) ${DEBUG} && printf "%s: %s: %s[%s]:\n" DEBUG "${ROLE_NAME}" paths none >&2
+                      ;;
+            *       ) printf "%s: Unknown value [%s] given for %s directive in [%s]\n" ERROR "${DIRECTION_BIN}" "path-method" "$META_PATH" >&2
+                      return 1
+                      ;;
+
+        esac
+
+        # Check if user wants all unset variables to be unset or remain as blank
+        if [[ "$DOTFILES_UNSET_EMPTY_VARIABLES" == "true" && -z "${new_value}" ]]; then
+            ${DEBUG} && printf "%s: %s: %s: unset '%s'\n" DEBUG "${ROLE_NAME}" paths "PATH" >&2
+            unset "PATH"
+        fi
+    fi
+
+    # FPATH
+    if [[ -d "$ROLE_FUN" ]]; then
+    
+        new_value="${FPATH}"
+        
+        case "${DIRECTION_FUN:-prepend}" in
+
+            prepend ) new_value=$(printf "%s\n" "$FPATH" | sed "s|^$ROLE_FUN:||g")
+                      ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" paths prepend "FPATH" "$new_value" >&2
+                      export FPATH="$new_value"
+                      ;;
+            append  ) new_value=$(printf "%s\n" "$FPATH" | sed "s|:?${ROLE_FUN}\$||g")
+                      ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" paths append "FPATH" "$new_value" >&2
+                      export FPATH="$new_value"
+                      ;;
+            none    ) ${DEBUG} && printf "%s: %s: %s[%s]:\n" DEBUG "${ROLE_NAME}" paths none >&2
+                      ;;
+            *       ) printf "%s: Unknown value [%s] given for %s directive in [%s]\n" ERROR "${DIRECTION_BIN}" "path-method" "$META_PATH" >&2
+                      return 1
+                      ;;
+
+        esac
+        
+        # Check if user wants all unset variables to be unset or remain as blank
+        if [[ "$DOTFILES_UNSET_EMPTY_VARIABLES" == "true" && -z "${new_value}" ]]; then
+            ${DEBUG} && printf "%s: %s: %s: unset '%s'\n" DEBUG "${ROLE_NAME}" paths "FPATH" >&2
+            unset "FPATH"
+        fi
+    fi
+
+    # LD_LIBRARY_PATH
+    if [[ -d "$ROLE_LIB" ]]; then
+    
+        new_value="${LD_LIBRARY_PATH}"
+        
+        case "${DIRECTION_LIB:-prepend}" in
+
+            prepend ) new_value=$(printf "%s\n" "$LD_LIBRARY_PATH" | sed "s|^$ROLE_LIB:||g")
+                      ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" paths prepend "LD_LIBRARY_PATH" "$new_value" >&2
+                      export LD_LIBRARY_PATH="$new_value"
+                      ;;
+            append  ) new_value=$(printf "%s\n" "$LD_LIBRARY_PATH" | sed "s|:?${ROLE_LIB}\$||g")
+                      ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" paths append "LD_LIBRARY_PATH" "$new_value" >&2
+                      export LD_LIBRARY_PATH="$new_value"
+                      ;;
+            none    ) ${DEBUG} && printf "%s: %s: %s[%s]:\n" DEBUG "${ROLE_NAME}" paths none >&2
+                      ;;
+            *       ) printf "%s: Unknown value [%s] given for %s directive in [%s]\n" ERROR "${DIRECTION_BIN}" "path-method" "$META_PATH" >&2
+                      return 1
+                      ;;
+
+        esac
+        
+        # Check if user wants all unset variables to be unset or remain as blank
+        if [[ "$DOTFILES_UNSET_EMPTY_VARIABLES" == "true" && -z "${new_value}" ]]; then
+            ${DEBUG} && printf "%s: %s: %s: unset '%s'\n" DEBUG "${ROLE_NAME}" paths "LD_LIBRARY_PATH" >&2
+            unset "LD_LIBRARY_PATH"
+        fi
+
+    fi
+    
+    return 0
+}
+
+
+#-- Main ------------------------------------------------------------------------------------------------------------
+
+case "$1" in
+
+    --setup    ) shift; setup "$@"
+                 ;;
+    --teardown ) shift; teardown "$@"
+                 ;;
+
+esac

@@ -1,0 +1,242 @@
+#!/bin/sh
+#####################################################################################################################
+#
+# Name:          env/main
+# Developer:     Philip Bowditch
+# Created:       20151110
+# Description:   dotfiles module to handle environment variables.  Requires a file called <role>/env with data in
+#                the format:
+#                <name> <value>
+#                ...
+#
+#####################################################################################################################
+
+
+#-- Functions -------------------------------------------------------------------------------------------------------
+
+function properties
+{
+    printf "REGISTER: %s\n" "env"
+    printf "TYPE: %s\n"     "file"
+}
+
+function setup
+{
+    ROLE_PATH=""
+    META_PATH=""
+    DEBUG=false
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --role  ) ROLE_PATH="$2"; shift 2
+                      ;;
+            --meta  ) META_PATH="$2"; shift 2
+                      ;;
+            --debug ) DEBUG=true; shift
+                      ;;
+        
+        esac
+        
+    done
+    
+    
+    ROLE_ENV="$ROLE_PATH/env"
+    ROLE_NAME=$(basename "$ROLE_PATH")
+    
+    # Format of the env variable file is (set|prepend|append) <name> <value>
+    LINES=$(sed 's|^[ ]*||g' "$ROLE_ENV" | grep -iE "^(set|prepend|append|rename|copy|unset) ")
+    PARAMS=$(printf "%s\n" "$LINES" | cut -d" " -f2)
+    
+    i=0
+    for PARAM in ${PARAMS}; do
+        
+        i=$(( i + 1 ))
+        
+        # Escape for egrep
+        PARAM_SAFE=$(escape_regex_extended "$PARAM")
+        
+        # Extract the exact line
+        name="$PARAM"
+        line=$(printf "%s\n" "$LINES" | head -${i} | tail -1)
+        action=$( printf "%s\n" "$line" | cut -d" " -f1  | tr '[A-Z]' '[a-z]' )
+        value=$(  printf "%s\n" "$line" | cut -d" " -f3- )
+
+        case "$action" in
+            
+            copy    ) ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" env copy "${value}" "\$${name}" >&2
+                      eval export "${value}"="\$${name}"
+                      if [[ $? -ne 0 ]]; then
+                          printf "%s: Could not create environment variable [%s] from role [%s]" ERROR "${value}" "${ROLE_PATH}" >&2
+                          return 1
+                      fi
+                      ;;
+            rename  ) ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" env rename "${value}" "\$${name}" >&2
+                      eval export "${value}"="\$${name}"
+                      if [[ $? -ne 0 ]]; then
+                          printf "%s: Could not create environment variable [%s] from role [%s]" ERROR "${value}" "${ROLE_PATH}" >&2
+                          return 1
+                      fi
+                      
+                      ${DEBUG} && printf "%s: %s: %s[%s]: unset '%s'\n" DEBUG "${ROLE_NAME}" env rename "${name}" >&2
+                      unset "${name}"
+                      if [[ $? -ne 0 ]]; then
+                          printf "%s: Could not unset environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
+                          return 1
+                      fi
+                      ;;
+            unset   ) ${DEBUG} && printf "%s: %s: %s[%s]: unset '%s'\n" DEBUG "${ROLE_NAME}" env unset "${name}" >&2
+                      unset "${name}"
+                      if [[ $? -ne 0 ]]; then
+                          printf "%s: Could not unset environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
+                          return 1
+                      fi
+                      ;;
+            set     ) ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" env set "${name}" "${value}" >&2
+                      eval export "${name}"="${value}"
+                      if [[ $? -ne 0 ]]; then
+                          printf "%s: Could not create environment variable [%s] from role [%s]" ERROR "${name}" "${ROLE_PATH}" >&2
+                          return 1
+                      fi
+                      ;;
+            prepend ) ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s%s'\n" DEBUG "${ROLE_NAME}" env prepend "${name}" "${value}" "\$${name}" >&2
+                      eval export "${name}"="${value}\$${name}"
+                      if [[ $? -ne 0 ]]; then
+                          printf "%s: Could not prepend environment variable [%s] from role [%s]" ERROR "${name}" "${ROLE_PATH}" >&2
+                          return 1
+                      fi
+                      ;;
+            append  ) ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s%s'\n" DEBUG "${ROLE_NAME}" env append "${name}" "\$${name}" "${value}" >&2
+                      eval export "${name}"="\$${name}${value}"
+                      if [[ $? -ne 0 ]]; then
+                          printf "%s: Could not append environment variable [%s] from role [%s]" ERROR "${name}" "${ROLE_PATH}" >&2
+                          return 1
+                      fi
+                      ;;
+            
+        esac
+
+    done
+    
+    return 0
+}
+
+function teardown
+{
+    ROLE_PATH=""
+    META_PATH=""
+    DEBUG=false
+    
+    while [[ $# -gt 0 ]]; do
+    
+        case "$1" in
+        
+            --role  ) ROLE_PATH="$2"; shift 2
+                      ;;
+            --meta  ) META_PATH="$2"; shift 2
+                      ;;
+            --debug ) DEBUG=true; shift
+                      ;;
+            
+        esac
+        
+    done
+    
+    ROLE_ENV="$ROLE_PATH/env"
+    ROLE_NAME=$(basename "$ROLE_PATH")
+    
+    # Need to remove the need for a while loop as this spawns a subshell in POSIX / bash so the exports arent exposed
+    #read_config "$ROLE_ENV" | while read -r action name value; do
+    LINES=$(sed 's|^[ ]*||g' "$ROLE_ENV" | grep -iE "^(set|prepend|append|rename|copy|unset) ")
+    PARAMS=$(printf "%s\n" "$LINES" | cut -d" " -f2 | awk '{a[i++]=$0} END {for (j=i-1; j>=0;) print a[j--] }')  #Reverse
+    
+    i=0
+    for PARAM in ${PARAMS}; do
+
+        i=$(( i + 1 ))
+        
+        # Escape for egrep
+        PARAM_SAFE=$(escape_regex_extended "$PARAM")
+        
+        # Extract the exact line
+        name="$PARAM"
+        line=$(   printf "%s\n" "$LINES" | tail -${i} | head -1)
+        action=$( printf "%s\n" "$line"  | cut -d" " -f1  | tr '[A-Z]' '[a-z]' )
+        value=$(  printf "%s\n" "$line"  | cut -d" " -f3- )
+        new_value="$value"
+
+        case "$action" in
+
+            copy    ) ${DEBUG} && printf "%s: %s: %s[%s]: unset '%s'\n" DEBUG "${ROLE_NAME}" env copy "${value}" >&2
+                      unset "${value}"
+                      if [[ $? -ne 0 ]]; then
+                          printf "%s: Could not unset environment variable [%s] from role [%s]\n" ERROR "${value}" "${ROLE_PATH}" >&2
+                          return 1
+                      fi
+                      ;;
+            rename  ) ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" env rename "${name}" "\$${value}" >&2
+                      eval export "${name}"="\$${value}"
+                      if [[ $? -ne 0 ]]; then
+                          printf "%s: Could not create environment variable [%s] from role [%s]" ERROR "${name}" "${ROLE_PATH}" >&2
+                          return 1
+                      fi
+                      
+                      #unset "${value}"
+                      #if [[ $? -ne 0 ]]; then
+                      #    printf "%s: Could not unset environment variable [%s] from role [%s]\n" ERROR "${value}" "${ROLE_PATH}" >&2
+                      #    return 1
+                      #fi
+                      ;;
+            unset   ) ;;
+            set     ) ${DEBUG} && printf "%s: %s: %s[%s]: unset '%s'\n" DEBUG "${ROLE_NAME}" env set "${name}" >&2
+                      unset "${name}"
+                      if [[ $? -ne 0 ]]; then
+                          printf "%s: Could not unset environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
+                          return 1
+                      fi
+                      ;;
+            prepend ) #eval export ${name}=${value}${name}
+                      value_interpreted=$(eval printf "%s" "${value}")
+                      new_value=$(env | grep "^${name}=" | sed "s|^${name}=||g" | sed "s|^${value_interpreted}||g")
+                          
+                      ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" env prepend "${name}" "${new_value}" >&2
+                      export ${name}="$new_value"
+                      if [[ $? -ne 0 ]]; then
+                          printf "%s: Could not pop environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
+                          return 1
+                      fi
+                      ;;
+            append  ) #eval export ${name}=${value}${name}
+                      value_interpreted=$(eval printf "%s" "${value}")
+                      new_value=$(env | grep "^${name}=" | sed "s|^${name}=||g" | sed "s|${value_interpreted}$||g")
+                          
+                      ${DEBUG} && printf "%s: %s: %s[%s]: export '%s'='%s'\n" DEBUG "${ROLE_NAME}" env append "${name}" "${new_value}" >&2
+                      export ${name}="$new_value"
+                      if [[ $? -ne 0 ]]; then
+                          printf "%s: Could not shift environment variable [%s] from role [%s]\n" ERROR "${name}" "${ROLE_PATH}" >&2
+                          return 1
+                      fi
+                      ;;
+            
+        esac
+            
+        # Check if user wants all unset variables to be unset or remain as blank
+        if [[ "$DOTFILES_UNSET_EMPTY_VARIABLES" == "true" && -z "${new_value}" ]]; then
+            unset "${name}"
+        fi
+            
+    done
+}
+
+
+#-- Main ------------------------------------------------------------------------------------------------------------
+
+case "$1" in
+
+    --setup    ) shift; setup "$@"
+                 ;;
+    --teardown ) shift; teardown "$@"
+                 ;;
+
+esac
