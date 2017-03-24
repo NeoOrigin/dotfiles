@@ -4,7 +4,7 @@
 # Description:  Authorizes whether a user is allowed access to a role (TODO)
 # Parameters:   1 - The user name
 #               2 - The role name
-# 
+#
 ####################################################################################
 
 [[ ! -f "${DOTFILES_AUTHORIZE_FILE}" ]] && exit 0
@@ -17,7 +17,7 @@ RESULT=1
 GROUP_LIST=$(groups "${1}" | cut -d" " -f3-)
 
 # Format of the DOTFILES_AUTHORIZE_FILE looks like
-# (ALLOW|DENY) USERNAME[:GROUPNAME] role ... 
+# (ALLOW|DENY) USERNAME[:GROUPNAME] role ...
 # Note a user may have more than one entry
 grep -v "^#" ${DOTFILES_AUTHORIZE_FILE} | grep -v "^$" | while read -r userauth; do
 
@@ -38,7 +38,7 @@ grep -v "^#" ${DOTFILES_AUTHORIZE_FILE} | grep -v "^$" | while read -r userauth;
 
     # Perform some basic re matching again username, groupname and roles, if in list then success
     if [[ "${1}" =~ ^${AUTH_USER}$ && "${GROUP_LIST}" =~ ^.*[ ]*${AUTH_GROUP}.*[ ]*$ && ${2} =~ ^.*[ ]*${AUTH_ROLE_LIST}.*[ ]*$ ]]; then
-        
+
         RESULT=0
 
         if [[ "${AUTH_ALLOW}" == "DENY" ]]; then

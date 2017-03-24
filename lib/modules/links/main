@@ -5,7 +5,7 @@
 # Developer:     Philip Bowditch
 # Created:       20151110
 # Description:   dotfiles module to handle symbolic links.  Any files/directories contained under a folder called
-#                <role>/links will be symlinked into the users home directory.  
+#                <role>/links will be symlinked into the users home directory.
 #
 #####################################################################################################################
 
@@ -23,51 +23,51 @@ function setup
     ROLE_PATH=""
     META_PATH=""
     DEBUG=false
-    
+
     while [[ $# -gt 0 ]]; do
-    
+
         case "$1" in
-        
+
             --role  ) ROLE_PATH="$2"; shift 2
                       ;;
             --meta  ) META_PATH="$2"; shift 2
                       ;;
             --debug ) DEBUG=true; shift
                       ;;
-        
+
         esac
-        
+
     done
-    
-    
+
+
     ROLE_LINK="$ROLE_PATH/links"
     ROLE_NAME=$(basename "$ROLE_PATH")
-    
+
     # Find direct children
     TARGETS=$(find "$ROLE_LINK" -maxdepth 1 -mindepth 1 2>/dev/null | sort)
 
     # Go through all the files/folders found in the links folder as we need to point to them as symbolic
     # links in the users home directory
     for name in ${TARGETS}; do
-        
+
         # Escape the name of the link as will be used for egrep
         SHORT_NAME=$(basename "${name}")
         SHORT_NAME_SAFE=$(escape_regex_extended "${SHORT_NAME}")
 
         # Determines whether we need to create the link (ie we dont rebuild a link if it already exists)
         REBUILD_LINK=true
-            
+
         # By default all links are created in the home directory unless overriden
         BASE_PATH=$(echo ~)
-            
+
         LINKS_LIST=""
         CHMOD_PERMS=""
         CHOWN_USER=""
         CHMOD_RECURSIVE=false
         CHOWN_RECURSIVE=false
-        
+
         if [[ -f "$META_PATH" ]]; then
-            
+
             # When building links you can chmod it as well, extract both information
             # Ensure you ignore case, trim string
             OVERRIDES=$(sed 's|^[ ]*||g' "$META_PATH" | grep -iE "^(chmod|link|chown) " | grep -E "^[a-zA-Z]* ${SHORT_NAME_SAFE} ")
@@ -77,25 +77,25 @@ function setup
             LINKS_LIST=$(      printf "%s\n" "${OVERRIDES}" | grep -i "^link "  | tail -1 | cut -d" " -f3)
             CHOWN_USER=$(      printf "%s\n" "${OVERRIDES}" | grep -i "^chown " | tail -1 | cut -d" " -f3)
             CHOWN_RECURSIVE=$( printf "%s\n" "${OVERRIDES}" | grep -i "^chown " | tail -1 | cut -d" " -f4)
-            
+
             [[ -n "${LINKS_LIST}" ]] && BASE_PATH="${LINKS_LIST}"
         fi
-        
+
         NEW_LINK="${BASE_PATH}/${SHORT_NAME}"
-        
+
         # Check the link already exists, if it does we may need to repoint it
         if [[ -L "${NEW_LINK}" ]]; then
 
             ORIG_TARGET=$(readlink --canonicalize "${NEW_LINK}")
             NEW_TARGET=$( readlink --canonicalize "${name}")
-                
+
             # Perform quick check, no point rebuilding link if its going to be the same
             # Also prevents danger that an already running process requires the presence of this link
             # you dont want it dissappearing even for a millisecond just because you logged in
             if [[ "${ORIG_TARGET}" == "${NEW_TARGET}" ]]; then
                 continue
             fi
-                
+
             # Remove the link, ready to rebuild
             #${DEBUG} && log_it DEBUG CLEANUP "rm -f '${NEW_LINK}'"
             ${DEBUG} && printf "%s: %s: %s: rm -f '%s'\n" DEBUG "${ROLE_NAME}" links "${NEW_LINK}" >&2
@@ -106,14 +106,14 @@ function setup
             fi
 
         fi
-            
+
         # Only create a link if there is nothing there i.e. above we only checked if a symbolic link existed that
         # needs repointing, however if a file is there then user must have wanted an override of their own
         # we do not delete user overrides
         if [[ -e "${NEW_LINK}" ]]; then
             continue
         fi
-            
+
         # Try creating the symbolic link
         #${DEBUG} && log_it DEBUG LINKING "ln -s '${name}' '${BASE_PATH}/${SHORT_NAME}'"
         ${DEBUG} && printf "%s: %s: %s: ln -s '%s' '%s'\n" DEBUG "${ROLE_NAME}" links "${name}" "${NEW_LINK}" >&2
@@ -122,53 +122,53 @@ function setup
             printf "%s: Could not add symbolic links from role [%s]\n" ERROR "${ROLE_PATH}" >&2
             return 1
         fi
-            
+
         # If in the metadata the user also described permissions
         if [[ -n "$CHMOD_PERMS" ]]; then
-            
+
             # Get the current permissions and if they are not the same then change them
             # NOTE we do not support logical u+w etc permissions, only octal
             CURR_PERMS=$(find "${BASE_PATH}" -mindepth 1 -maxdepth 1 -name "${SHORT_NAME}" -printf "%#m\n")
             if [[ -n "$CURR_PERMS" && "$CURR_PERMS" != "$CHMOD_PERMS" ]]; then
-                
+
                 RECURSIVE=""
                 [[ "$CHMOD_RECURSIVE" == "true" ]] && RECURSIVE="-R "
-                    
+
                 ${DEBUG} && printf "%s: %s: %s: chmod %s'%s' '%s'\n" DEBUG "${ROLE_NAME}" links "${RECURSIVE}" "$CHMOD_PERMS" "${NEW_LINK}" >&2
                 chmod ${RECURSIVE} "$CHMOD_PERMS" "${NEW_LINK}"
                 if [[ $? -ne 0 ]]; then
                     printf "%s: Could not set permissions [%s] on symbolic links from role [%s]\n" ERROR "$CHMOD_PERMS" "${ROLE_PATH}" >&2
                     return 1
                 fi
-                    
+
             fi
-                
+
         fi
-            
+
         # If in the metadata the user also described ownership
         if [[ -n "$CHOWN_USER" ]]; then
-            
+
             # Get the current permissions and if they are not the same then change them
             # NOTE we do not support logical u+w etc permissions, only octal
             CURR_USER=$(find "${BASE_PATH}" -mindepth 1 -maxdepth 1 -name "${SHORT_NAME}" -printf "%u:%g\n")
             if [[ -n "$CURR_USER" && "$CURR_USER" != "$CHOWN_USER" ]]; then
-                
+
                 RECURSIVE=""
                 [[ "$CHOWN_RECURSIVE" == "true" ]] && RECURSIVE="-R "
-                    
+
                 ${DEBUG} && printf "%s: %s: %s: chown %s'%s' '%s'\n" DEBUG "${ROLE_NAME}" links "${RECURSIVE}" "$CHOWN_USER" "${NEW_LINK}" >&2
                 chown ${RECURSIVE} "$CHOWN_USER" "${NEW_LINK}"
                 if [[ $? -ne 0 ]]; then
                     printf "%s: Could not set ownsership [%s] on symbolic links from role [%s]\n" ERROR "$CHOWN_USER" "${ROLE_PATH}" >&2
                     return 1
                 fi
-                    
+
             fi
-                
+
         fi
-            
+
     done
-    
+
     return 0
 }
 
@@ -177,44 +177,44 @@ function teardown
     ROLE_PATH=""
     META_PATH=""
     DEBUG=false
-    
+
     while [[ $# -gt 0 ]]; do
-    
+
         case "$1" in
-        
+
             --role  ) ROLE_PATH="$2"; shift 2
                       ;;
             --meta  ) META_PATH="$2"; shift 2
                       ;;
             --debug ) DEBUG=true; shift
                       ;;
-        
+
         esac
-        
+
     done
-    
+
     ROLE_LINK="$ROLE_PATH/links"
     ROLE_NAME=$(basename "$ROLE_PATH")
-    
+
     # Look at direct children (in reverse)
     TARGETS=$(find "$ROLE_LINK" -maxdepth 1 -mindepth 1 2>/dev/null | sort -r)
-        
+
     # Go through all the files/folders found in the links folder as we need to point to them as symbolic
     # links in the users home directory
     for name in ${TARGETS}; do
-        
+
         SHORT_NAME=$(basename "${name}")
         SHORT_NAME_SAFE=$(escape_regex "${SHORT_NAME}")
 
         BASE_PATH=$(echo ~)
         LINKS_LIST=""
-            
+
         # Check if there is a role configuration file redirecting this link
         [[ -f "$META_PATH"    ]] && LINKS_LIST=$(sed 's|^[ ]*||g' "$META_PATH" | grep -v "^[lL][iI][nN][kK] ${SHORT_NAME_SAFE} " | head -1 | cut -d" " -f3)
         [[ -n "${LINKS_LIST}" ]] && BASE_PATH="${LINKS_LIST}"
-        
+
         NEW_LINK="${BASE_PATH}/${SHORT_NAME}"
-        
+
         # Check if link already exists, if so, remove it
         if [[ -L "${NEW_LINK}" ]]; then
 
@@ -227,9 +227,9 @@ function teardown
             fi
 
         fi
-            
+
     done
-    
+
     return 0
 }
 

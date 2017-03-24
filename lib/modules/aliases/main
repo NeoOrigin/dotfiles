@@ -25,32 +25,32 @@ function setup
     ROLE_PATH=""
     META_PATH=""
     DEBUG=false
-    
+
     while [[ $# -gt 0 ]]; do
-    
+
         case "$1" in
-        
+
             --role  ) ROLE_PATH="$2"; shift 2
                       ;;
             --meta  ) META_PATH="$2"; shift 2
                       ;;
             --debug ) DEBUG=true; shift
                       ;;
-            
+
         esac
-        
+
     done
-    
-    
+
+
     ROLE_ALIASES="$ROLE_PATH/aliases"
     ROLE_NAME=$(basename "$ROLE_PATH")
-    
+
     # Get the alias names by trimming, removing comments and blank lines
     ALIASES=$(sed 's|^[ ]*||g' "$ROLE_ALIASES" | grep -v "^#" | grep -v "^$" | sed 's|^[ ]*||g' | cut -d" " -f1)
-        
+
     # Go through all alias names, grab their value and create the alias
     for ALIAS_DEF in ${ALIASES}; do
-            
+
         # Escape, suitable for grep
         name=$(printf "%s\n" "$ALIAS_DEF" | sed 's|\.|\\.|g')
         value=$(sed 's|^[ ]*||g' "$ROLE_ALIASES" | grep "^${name} " | tail -1 | cut -d" " -f2-)
@@ -63,7 +63,7 @@ function setup
         fi
 
     done
-    
+
     return 0
 }
 
@@ -72,36 +72,36 @@ function teardown
     ROLE_PATH=""
     META_PATH=""
     DEBUG=false
-    
+
     while [[ $# -gt 0 ]]; do
-    
+
         case "$1" in
-        
+
             --role  ) ROLE_PATH="$2"; shift 2
                       ;;
             --meta  ) META_PATH="$2"; shift 2
                       ;;
             --debug ) DEBUG=true; shift
                       ;;
-        
+
         esac
-        
+
     done
-    
-    
+
+
     ROLE_ALIASES="$ROLE_PATH/aliases"
     ROLE_NAME=$(basename "$ROLE_PATH")
-    
+
     ALIASES=$(sed 's|^[ ]*||g' "$ROLE_ALIASES" | grep -v "^#" | grep -v "^$" | sed 's|^[ ]*||g' | cut -d" " -f1 | awk '{a[i++]=$0} END {for (j=i-1; j>=0;) print a[j--] }')  #Reverse
-        
+
     for ALIAS_DEF in ${ALIASES}; do
-        
+
         ${DEBUG} && printf "%s: %s: %s: unalias -- '%s'\n" DEBUG "${ROLE_NAME}" alias "${ALIAS_DEF}" >&2
         unalias -- "${ALIAS_DEF}" 2>/dev/null
         # No point monitoring for error, alias wont be there
-            
+
     done
-    
+
     return 0
 }
 
